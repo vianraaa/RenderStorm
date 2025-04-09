@@ -6,6 +6,9 @@ public struct OpenGL
 {
     public static GL API;
 
+    /// <summary>
+    /// Toggles depth testing
+    /// </summary>
     public static bool DepthTest
     {
         set
@@ -17,6 +20,9 @@ public struct OpenGL
         }
     }
     
+    /// <summary>
+    /// Toggles face culling
+    /// </summary>
     public static bool CullFace
     {
         set
