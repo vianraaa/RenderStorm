@@ -18,6 +18,7 @@ public class RSWindow: IDisposable
     public Action ViewBegin;
     public Action ViewEnd;
     public Action<double> ViewUpdate;
+    public bool Running = true;
 
     public bool DebuggerOpen = false;
     #if DEBUG
@@ -82,6 +83,7 @@ public class RSWindow: IDisposable
 
     public void Run()
     {
+        Glfw.SwapInterval(0);
         API.ClearColor(0f, 0f, 0f, 1.0f);
         API.Enable(EnableCap.FramebufferSrgb);
         RSDebugger.Init(this);
@@ -97,8 +99,10 @@ public class RSWindow: IDisposable
 
         ViewBegin?.Invoke();
         double dt = 1.0f / 60.0f;
-        while (!Glfw.WindowShouldClose(Native))
+        while (Running)
         {
+            if (Glfw.WindowShouldClose(Native))
+                Running = false;
             Glfw.Time = 0;
             Glfw.PollEvents();
             Glfw.GetFramebufferSize(Native, out var width, out var height);

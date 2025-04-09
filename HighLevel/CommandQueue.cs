@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Numerics;
 using RenderStorm.Display;
+using RenderStorm.Other;
 
 namespace RenderStorm.HighLevel;
 
@@ -26,15 +28,17 @@ namespace RenderStorm.HighLevel;
 /// </summary>
 public interface ICommandQueueItem: IDisposable
 {
+    public string DebugName { get; }
+    public Type AllocatedType { get; }
     /// <summary>
     /// Used for culling and other operations
     /// </summary>
-    Vector3 AABBMin { get; set; }
+    public Vector3 AABBMin { get; set; }
     /// <summary>
     /// Used for culling and other operations
     /// </summary>
-    Vector3 AABBMax { get; set; }
-    public void Dispatch(Matrix4x4 view, Matrix4x4 projection);
+    public Vector3 AABBMax { get; set; }
+    public void Dispatch(Matrix4x4 matrix);
 }
 
 public struct DrawContext
@@ -49,8 +53,22 @@ public struct DrawContext
 
 public class CommandQueue: IDisposable
 {
-    public DrawContext DrawContext = new DrawContext();
-    private List<ICommandQueueItem> _commandQueue = new List<ICommandQueueItem>();
+    public readonly string DebugName = "Queue";
+    public DrawContext DrawContext = new();
+    internal List<ICommandQueueItem> CommandQueueList = new();
+    internal List<long> CommandQueueTimes = new();
+    internal long TotalTime = 0;
+    
+    private readonly Stopwatch totalStopwatch = new Stopwatch();
+    private readonly Stopwatch commandStopwatch = new Stopwatch();
+
+
+    public CommandQueue(string debugName)
+    {
+        DebugName = debugName;
+        RSDebugger.Queues.Add(this);
+        RSDebugger.QueueNames.Add(DebugName);
+    }
     /// <summary>
     /// Preprocesses and dispatches all attached command items.
     /// </summary>
@@ -60,41 +78,50 @@ public class CommandQueue: IDisposable
     {
         Matrix4x4 view = cam.GetView();
         Matrix4x4 proj = cam.GetProjection(RSWindow.Instance.GetAspect());
-        Dispatch(view, proj, arguments);
+        if ((arguments & DispatchArguments.SwitchViewProjection) != 0)
+        {
+            Dispatch(view * proj, arguments);
+        }
+        else
+        {
+            Dispatch(view * proj, arguments);
+        }
+        
     }
 
-    public void Dispatch(Matrix4x4 view, Matrix4x4 projection, DispatchArguments arguments = DispatchArguments.Default)
+    public void Dispatch(Matrix4x4 matrix, DispatchArguments arguments = DispatchArguments.Default)
     {
-        Matrix4x4 realView = view;
-        Matrix4x4 realProjection = projection;
-        
-        if (arguments.HasFlag(DispatchArguments.SwitchViewProjection))
-        {
-            realView = realProjection;
-            realProjection = projection;
-        }
+        totalStopwatch.Restart();
+        CommandQueueTimes.Clear();
         // apply our draw context before dispatching
         OpenGL.DepthTest = DrawContext.DepthTesting;
         OpenGL.CullFace = DrawContext.CullFace;
-        foreach (var command in _commandQueue)
+        foreach (var command in CommandQueueList)
         {
-            command.Dispatch(realView, realProjection);
+            commandStopwatch.Restart();
+            command.Dispatch(matrix);
+            commandStopwatch.Stop();
+            CommandQueueTimes.Add(commandStopwatch.ElapsedMilliseconds);
         }
+        totalStopwatch.Stop();
+        TotalTime = totalStopwatch.ElapsedMilliseconds;
     }
 
     public void Add(ICommandQueueItem item)
     {
-        _commandQueue.Add(item);
+        CommandQueueList.Add(item);
     }
     
     public void Remove(ICommandQueueItem item)
     {
-        _commandQueue.Remove(item);
+        CommandQueueList.Remove(item);
     }
     
     public void Dispose()
     {
-        foreach (var command in _commandQueue)
+        RSDebugger.Queues.Remove(this);
+        RSDebugger.QueueNames.Remove(DebugName);
+        foreach (var command in CommandQueueList)
         {
             command.Dispose();
         }

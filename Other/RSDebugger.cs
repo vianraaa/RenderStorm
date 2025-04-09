@@ -6,6 +6,7 @@ using System.Numerics;
 using ImGuiNET;
 using RenderStorm.Abstractions;
 using RenderStorm.Display;
+using RenderStorm.HighLevel;
 using RenderStorm.RSImGui;
 using Silk.NET.OpenGL;
 
@@ -18,12 +19,18 @@ public static class RSDebugger
     internal static List<IProfilerObject> Textures = new();
     internal static List<IProfilerObject> Shaders = new();
     internal static List<IProfilerObject> RenderTextures = new();
+    
+    internal static List<CommandQueue> Queues = new();
+    internal static List<string> QueueNames = new();
+
+    private static int selectedQueue = 0;
 
     private static int _profilerTab;
     private static Dictionary<string, Action> _profilerTabs = new()
     {
         { "Overview", DrawOverviewTab },
-        { "Resources", DrawResourcesTab }
+        { "Resources", DrawResourcesTab },
+        { "Queue Viewer", DrawQueueTab }
     };
     private static readonly Vector4 _activeTabColor = new(0.26f, 0.59f, 0.98f, 0.4f);
     private static readonly Vector4 _inactiveTabColor = new(0.3f, 0.3f, 0.3f, 0.4f);
@@ -107,8 +114,44 @@ void main() {
         _arrayTexture?.Dispose();
         // _arrayShader?.Dispose(); // shader lifetime is managed by the engine
     }
+
+    private static void DrawQueueTab()
+    {
+        if (Queues.Count == 0)
+        {
+            float x = ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X / 2f;
+            const string msg = "A little empty...";
+            x -= ImGui.CalcTextSize(msg).X/2;
+            ImGui.SetCursorPosX(x);
+            ImGui.Text(msg);
+            return;
+        }
+        ImGui.Combo("Queue", ref selectedQueue, QueueNames.ToArray(), QueueNames.Count);
+        ImGui.SameLine();
+        var queue = Queues[selectedQueue];
+        ImGui.Text($"[{queue.TotalTime} ms]");
+        int i = 0;
+        foreach (var cmd in queue.CommandQueueList)
+        {
+            Type t = cmd.GetType();
+            ImGui.BeginChild(cmd.DebugName + "##", new(ImGui.GetContentRegionAvail().X, 0), ImGuiChildFlags.AutoResizeY | 
+                                                                            ImGuiChildFlags.AlwaysAutoResize | 
+                                                                            ImGuiChildFlags.FrameStyle);
+            ImGui.Text($"{cmd.DebugName}({t.Name}<{cmd.AllocatedType.Name}>)");
+            ImGui.SameLine();
+            ImGui.SetCursorPosX((ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X) - ImGui.CalcTextSize($"{queue.CommandQueueTimes[i]} ms").X);
+            ImGui.Text($"{queue.CommandQueueTimes[i]} ms");
+            ImGui.EndChild();
+            i++;
+        }
+    }
     
-    // Don't use this for ANYTHING other than debug, It is slow and inefficient. 
+    /// <summary>
+    /// Don't use this for ANYTHING other than debug, It is slow and inefficient. 
+    /// </summary>
+    /// <param name="text">Text to be rendered</param>
+    /// <param name="position">The position of the text relative to the top left corner</param>
+    /// <param name="color">The color of the text</param>
     public static void DrawDebugText(string text, Vector2? position = null, Color? color = null)
     {
         if (string.IsNullOrEmpty(text)) return;

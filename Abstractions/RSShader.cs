@@ -42,6 +42,8 @@ public class RSShader : IProfilerObject, IDisposable
     {
         _shaders.Add(this);
         DebugName = debugName;
+        RSDebugger.ShaderCount++;
+        RSDebugger.Shaders.Add(this);
         // can we find already existing cache?
         string hash1 = HashStr(vertexShaderSource);
         string hash2 = HashStr(fragmentShaderSource);
@@ -102,8 +104,6 @@ public class RSShader : IProfilerObject, IDisposable
 
         OpenGL.API.DeleteShader(vertexShader);
         OpenGL.API.DeleteShader(fragmentShader);
-        RSDebugger.ShaderCount++;
-        RSDebugger.Shaders.Add(this);
     }
 
     public void Dispose()
