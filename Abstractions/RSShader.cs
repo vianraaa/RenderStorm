@@ -1,7 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
+using RenderStorm.Display;
 using RenderStorm.Other;
 using Silk.NET.OpenGL;
 
@@ -20,11 +24,46 @@ public class RSShader : IProfilerObject, IDisposable
         }
         _shaders.Clear();
     }
+    
+    static string HashStr(string rawData)
+    {
+        using (SHA1 sha1 = SHA1.Create())
+        {
+            byte[] bytes = sha1.ComputeHash(Encoding.UTF8.GetBytes(rawData));
+
+            StringBuilder builder = new StringBuilder();
+            foreach (byte b in bytes)
+                builder.Append(b.ToString("x2"));
+            return builder.ToString();
+        }
+    }
 
     public RSShader(string vertexShaderSource, string fragmentShaderSource, string debugName = "Shader")
     {
         _shaders.Add(this);
         DebugName = debugName;
+        // can we find already existing cache?
+        string hash1 = HashStr(vertexShaderSource);
+        string hash2 = HashStr(fragmentShaderSource);
+        string hash3 = HashStr(hash1 + hash2);
+        string CachePath = Path.Combine(RSWindow.Instance.CachePath, hash3);
+        if (File.Exists(CachePath))
+        {
+            NativeInstance = OpenGL.API.CreateProgram();
+            byte[] binary = File.ReadAllBytes(CachePath);
+            int formatInt = BitConverter.ToInt32(binary, 0);
+            GLEnum format = (GLEnum)formatInt;
+            binary = binary.Skip(4).ToArray();
+            OpenGL.API.ProgramBinary(NativeInstance, format, MemoryMarshal.CreateReadOnlySpan<byte>(ref binary[0], binary.Length), (uint)binary.Length);
+            OpenGL.API.GetProgram(NativeInstance, ProgramPropertyARB.LinkStatus, out int rstatus);
+            if (rstatus == 0)
+            {
+                goto Continue;
+            }
+
+            return;
+        }
+        Continue:
         var vertexShader = CompileShader(ShaderType.VertexShader, vertexShaderSource);
         var fragmentShader = CompileShader(ShaderType.FragmentShader, fragmentShaderSource);
 
@@ -38,6 +77,27 @@ public class RSShader : IProfilerObject, IDisposable
         {
             var infoLog = OpenGL.API.GetProgramInfoLog(NativeInstance);
             throw new Exception($"Shader program linking failed: {infoLog}");
+        }
+        OpenGL.API.GetProgram(NativeInstance, ProgramPropertyARB.ProgramBinaryLength, out int length);
+        GLEnum bformat;
+        byte[] bbinary = new byte[length];
+        unsafe
+        {
+            fixed (byte* binaryPtr = bbinary)
+            {
+                OpenGL.API.GetProgramBinary(
+                    NativeInstance,
+                    (uint)length,
+                    out uint actualLength,
+                    out bformat,
+                    binaryPtr
+                );
+            }
+        }
+        using (BinaryWriter writer = new BinaryWriter(File.Open(CachePath, FileMode.Create)))
+        {
+            writer.Write((int)bformat);
+            writer.Write(bbinary);
         }
 
         OpenGL.API.DeleteShader(vertexShader);

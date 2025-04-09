@@ -25,6 +25,8 @@ public class RSWindow: IDisposable
     #else
     public bool DebugString = false;
     #endif
+    
+    public string CachePath = Path.GetFullPath(".renderstorm");
 
     public RSWindow(string title = "Game", int width = 1024, int height = 600)
     {
