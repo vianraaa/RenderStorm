@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("RenderStorm")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e7095f70691daf6cab33923a3d11320e0b3b251c")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+79cec96a7f7f527bcec3fbadd3a065ace89172ca")]
 [assembly: System.Reflection.AssemblyProductAttribute("RenderStorm")]
 [assembly: System.Reflection.AssemblyTitleAttribute("RenderStorm")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
