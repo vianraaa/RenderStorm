@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "2UrMdciidVA=",
+  "dgSpecHash": "KgF7iquAwwU=",
   "success": true,
   "projectFilePath": "/home/jasmine/RiptideSharp/RenderStorm/RenderStorm.csproj",
   "expectedPackageFiles": [
@@ -17,8 +17,7 @@
     "/home/jasmine/.nuget/packages/system.numerics.vectors/4.5.0/system.numerics.vectors.4.5.0.nupkg.sha512",
     "/home/jasmine/.nuget/packages/system.runtime.compilerservices.unsafe/6.0.0/system.runtime.compilerservices.unsafe.6.0.0.nupkg.sha512",
     "/home/jasmine/.nuget/packages/system.text.encodings.web/8.0.0/system.text.encodings.web.8.0.0.nupkg.sha512",
-    "/home/jasmine/.nuget/packages/system.text.json/8.0.0/system.text.json.8.0.0.nupkg.sha512",
-    "/home/jasmine/.nuget/packages/microsoft.aspnetcore.app.ref/9.0.3/microsoft.aspnetcore.app.ref.9.0.3.nupkg.sha512"
+    "/home/jasmine/.nuget/packages/system.text.json/8.0.0/system.text.json.8.0.0.nupkg.sha512"
   ],
   "logs": []
 }

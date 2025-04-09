@@ -13,10 +13,10 @@ public static class RSDebugging
 {
     public static Action<string, LogType>? OnLog;
 
-    public static void Log(string message, LogType logType = LogType.LOG_INFO)
+    public static void Log(string message, LogType logType = LogType.LOG_INFO, int skipFrames = 1)
     {
         OnLog?.Invoke(message, logType);
-        var frame = new StackFrame(0);
+        var frame = new StackFrame(skipFrames);
         Console.Write("[");
         Console.Write(frame.GetMethod().DeclaringType.Name + ".");
         Console.Write(frame.GetMethod().Name);
