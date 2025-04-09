@@ -1,26 +1,31 @@
 {
   "format": 1,
   "restore": {
-    "/home/jasmine/RiptideSharp/RenderStorm/RenderStorm.csproj": {}
+    "D:\\GitHub\\RiptideSharp\\RenderStorm\\RenderStorm.csproj": {}
   },
   "projects": {
-    "/home/jasmine/RiptideSharp/RenderStorm/RenderStorm.csproj": {
+    "D:\\GitHub\\RiptideSharp\\RenderStorm\\RenderStorm.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/home/jasmine/RiptideSharp/RenderStorm/RenderStorm.csproj",
+        "projectUniqueName": "D:\\GitHub\\RiptideSharp\\RenderStorm\\RenderStorm.csproj",
         "projectName": "RenderStorm",
-        "projectPath": "/home/jasmine/RiptideSharp/RenderStorm/RenderStorm.csproj",
-        "packagesPath": "/home/jasmine/.nuget/packages/",
-        "outputPath": "/home/jasmine/RiptideSharp/RenderStorm/obj/",
+        "projectPath": "D:\\GitHub\\RiptideSharp\\RenderStorm\\RenderStorm.csproj",
+        "packagesPath": "C:\\Users\\Jo\\.nuget\\packages\\",
+        "outputPath": "D:\\GitHub\\RiptideSharp\\RenderStorm\\obj\\",
         "projectStyle": "PackageReference",
+        "fallbackFolders": [
+          "D:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
         "configFilePaths": [
-          "/home/jasmine/.nuget/NuGet/NuGet.Config"
+          "C:\\Users\\Jo\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
         "originalTargetFrameworks": [
           "net9.0"
         ],
         "sources": {
-          "/usr/share/dotnet/library-packs": {},
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
@@ -74,7 +79,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/9.0.200/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.200/PortableRuntimeIdentifierGraph.json"
         }
       }
     }
