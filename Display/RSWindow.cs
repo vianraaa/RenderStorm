@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Numerics;
 using GLFW;
+using ImGuiNET;
 using RenderStorm.Abstractions;
 using RenderStorm.Other;
 using RenderStorm.RSImGui;
@@ -49,6 +51,7 @@ public class RSWindow: IDisposable
         API = GL.GetApi(GetProcAddress);
         OpenGL.API = API;
         Title = title;
+        
         ImGuiController = new ImGuiController(Native, width, height, OpenGL.API);
     }
 
@@ -83,9 +86,8 @@ public class RSWindow: IDisposable
 
     public void Run()
     {
-        Glfw.SwapInterval(0);
+        Glfw.SwapInterval(1);
         API.ClearColor(0f, 0f, 0f, 1.0f);
-        API.Enable(EnableCap.FramebufferSrgb);
         RSDebugger.Init(this);
         KeyCallback? old = null;
         old = Glfw.SetKeyCallback(Native, (window, key, scancode, action, mods) =>
@@ -123,11 +125,23 @@ public class RSWindow: IDisposable
             RSDebugger.DeltaTime = dt;
             RSDebugger.TimeElapsed += dt;
         }
+        Glfw.PollEvents();
+        Glfw.GetFramebufferSize(Native, out var a, out var b);
+        OpenGL.API.Viewport(0, 0, (uint)a, (uint)b);
+        OpenGL.API.Clear(ClearBufferMask.ColorBufferBit |
+                         ClearBufferMask.DepthBufferBit |
+                         ClearBufferMask.StencilBufferBit);
+        ImGuiController.WindowResized(a, b);
+        ImGuiController.Update((float)dt);
+        RSDebugger.DrawDebugText("Shutting down", (new Vector2(a, b) / 2.0f) -
+                                                  (ImGui.CalcTextSize("Shutting down") / 2.0f));
+        ImGuiController.Render();
+        Glfw.SwapBuffers(Native);
+        ViewEnd?.Invoke();
     }
 
     public void Dispose()
     {
-        ViewEnd?.Invoke();
         RSDebugger.Dispose();
         ImGuiController.Dispose();
         RSShader.Shutdown();

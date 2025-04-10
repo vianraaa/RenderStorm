@@ -153,8 +153,13 @@ public class RSShader : IProfilerObject, IDisposable
         var location = GetUniformLocation(name);
         if (location != -1)
             OpenGL.API.Uniform1(location, value);
-        else
-            RSDebugging.Log($"Uniform {name} not found in shader.", LogType.LOG_WARN);
+    }
+    
+    public void SetUniform(string name, int value)
+    {
+        var location = GetUniformLocation(name);
+        if (location != -1)
+            OpenGL.API.Uniform1(location, value);
     }
 
     public void SetUniform(string name, Vector2 value)
@@ -162,8 +167,6 @@ public class RSShader : IProfilerObject, IDisposable
         var location = GetUniformLocation(name);
         if (location != -1)
             OpenGL.API.Uniform2(location, value);
-        else
-            RSDebugging.Log($"Uniform {name} not found in shader.", LogType.LOG_WARN);
     }
     
     public void SetUniform(string name, Vector3 value)
@@ -171,8 +174,6 @@ public class RSShader : IProfilerObject, IDisposable
         var location = GetUniformLocation(name);
         if (location != -1)
             OpenGL.API.Uniform3(location, value);
-        else
-            RSDebugging.Log($"Uniform {name} not found in shader.", LogType.LOG_WARN);
     }
     
     public void SetUniform(string name, Matrix4x4 value)
@@ -180,7 +181,5 @@ public class RSShader : IProfilerObject, IDisposable
         var location = GetUniformLocation(name);
         if (location != -1)
             OpenGL.API.UniformMatrix4(location, false, MemoryMarshal.CreateReadOnlySpan(ref value.M11, 16));
-        else
-            RSDebugging.Log($"Uniform {name} not found in shader.", LogType.LOG_WARN);
     }
 }

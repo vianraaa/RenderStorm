@@ -43,7 +43,7 @@ public static class RSDebugger
     public static double DeltaTime { get; internal set; }
     public const string RSVERSION = "RENDERSTORM 0.1.1";
 
-    private static RSRenderTexture? _arrayTexture;
+    private static RSRenderTarget? _arrayTexture;
     private static RSShader? _arrayShader;
 
     private static float _previewCamZoom = 1;
@@ -58,7 +58,7 @@ public static class RSDebugger
     public static void Init(RSWindow window)
     {
         ImGuiController.OnScroll += onScroll;
-        _arrayTexture = new RSRenderTexture(256, 256, window, "ArrayObjectPreviewBuffer");
+        _arrayTexture = new RSRenderTarget(256, 256, window, "ArrayObjectPreviewBuffer");
         RenderTextures.Remove(_arrayTexture);
         RenderTextureCount -= 1;
         _arrayTexture.Begin();
@@ -131,7 +131,7 @@ void main() {
         var queue = Queues[selectedQueue];
         ImGui.Text($"[{queue.TotalTime} ms]");
         int i = 0;
-        foreach (var cmd in queue.CommandQueueList)
+        foreach (var cmd in queue.RenderQueue.ToArray())
         {
             Type t = cmd.GetType();
             ImGui.BeginChild(cmd.DebugName + "##", new(ImGui.GetContentRegionAvail().X, 0), ImGuiChildFlags.AutoResizeY | 
@@ -356,7 +356,7 @@ void main() {
         }
         
         ImGui.Separator();
-        if (ImGui.CollapsingHeader("Render Textures", ImGuiTreeNodeFlags.DefaultOpen))
+        if (ImGui.CollapsingHeader("Render Targets", ImGuiTreeNodeFlags.DefaultOpen))
         {
             if (RenderTextures.Count == 0)
             {
@@ -373,7 +373,7 @@ void main() {
                     var index = row * columns + col;
                     if (index >= RenderTextures.Count)
                         break;
-                    var texture = (RSRenderTexture)RenderTextures[index];
+                    var texture = (RSRenderTarget)RenderTextures[index];
                     ImGui.Image((IntPtr)texture.ColorTexture, new Vector2(size, size), new(0, 1), new(1, 0));
                     ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(0, 2));
                     if (ImGui.BeginItemTooltip())

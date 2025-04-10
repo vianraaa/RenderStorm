@@ -11,8 +11,11 @@ public class Surface<T>: ICommandQueueItem where T : unmanaged
     public Matrix4x4 Model { get; set; }
     public Vector3 AABBMin { get; set; }
     public Vector3 AABBMax { get; set; }
+    public Action<RSShader?> PreDraw { get; set; }
+    public Action<RSShader?> PostDraw { get; set; }
 
     private RSVertexArray<T> _array;
+    private bool _isExternalAllocation = false;
 
     public Surface(ReadOnlySpan<T> vertices, ReadOnlySpan<uint> indices, string debugName)
     {
@@ -25,16 +28,19 @@ public class Surface<T>: ICommandQueueItem where T : unmanaged
         DebugName = debugName;
         Model = Matrix4x4.Identity;
         _array = array;
+        _isExternalAllocation = true;
     }
+
     public void Dispatch(Matrix4x4 matrix, RSShader? shader)
     {
         shader?.SetUniform("m_Model", Model);
         _array.DrawIndexed();
     }
-    
+
     public void Dispose()
     {
-        _array.Dispose();
+        if(!_isExternalAllocation)
+            _array.Dispose();
         // _pipeline.Dispose(); // shader lifetime is managed by the engine
     }
 }

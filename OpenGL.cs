@@ -33,4 +33,15 @@ public struct OpenGL
                 API.Disable(EnableCap.CullFace);
         }
     }
+
+    public static bool InvertCulling
+    {
+        set
+        {
+            if(value)
+                API.FrontFace(FrontFaceDirection.Ccw);
+            else
+                API.FrontFace(FrontFaceDirection.CW);
+        }
+    }
 }

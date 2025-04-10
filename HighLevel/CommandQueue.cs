@@ -143,6 +143,9 @@ public interface ICommandQueueItem: IDisposable
     /// Used for culling and other operations
     /// </summary>
     public Vector3 AABBMax { get; set; }
+
+    public Action<RSShader?>? PreDraw { get; set; }
+    public Action<RSShader?>? PostDraw { get; set; }
     public void Dispatch(Matrix4x4 matrix, RSShader? shader);
 }
 
@@ -161,7 +164,7 @@ public class CommandQueue: IDisposable
     public readonly string DebugName = "Queue";
     public DrawContext DrawContext = new();
     public RSShader? DrawShader;
-    public List<ICommandQueueItem> CommandQueueList = new();
+    public Queue<ICommandQueueItem> RenderQueue = new();
     public int DrawnItems = 0;
     internal List<long> CommandQueueTimes = new();
     internal long TotalTime = 0;
@@ -229,11 +232,21 @@ public class CommandQueue: IDisposable
         OpenGL.CullFace = DrawContext.CullFace;
         DrawShader?.Use();
         DrawShader?.SetUniform("m_ViewProj", matrix);
-        foreach (var command in CommandQueueList)
+        var countCopy = RenderQueue.Count;
+        for (int i = 0; i < countCopy; i++)
         {
-            if(!IsInViewFrustum(command, matrix)) continue;
+            ICommandQueueItem command = RenderQueue.Dequeue();
+            if (!IsInViewFrustum(command, matrix))
+            {
+                CommandQueueTimes.Add(-1);
+                continue;
+            }
             commandStopwatch.Restart();
+            
+            command.PreDraw?.Invoke(DrawShader);
             command.Dispatch(matrix, DrawShader);
+            command.PostDraw?.Invoke(DrawShader);
+            
             commandStopwatch.Stop();
             CommandQueueTimes.Add(commandStopwatch.ElapsedMilliseconds);
             DrawnItems++;
@@ -243,21 +256,16 @@ public class CommandQueue: IDisposable
         TotalTime = totalStopwatch.ElapsedMilliseconds;
     }
 
-    public void Add(ICommandQueueItem item)
+    public void Push(ICommandQueueItem item)
     {
-        CommandQueueList.Add(item);
-    }
-
-    public void Remove(ICommandQueueItem item)
-    {
-        CommandQueueList.Remove(item);
+        RenderQueue.Enqueue(item);
     }
 
     public void Dispose()
     {
         RSDebugger.Queues.Remove(this);
         RSDebugger.QueueNames.Remove(DebugName);
-        foreach (var command in CommandQueueList)
+        foreach (var command in RenderQueue)
         {
             command.Dispose();
         }

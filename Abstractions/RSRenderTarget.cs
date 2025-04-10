@@ -7,7 +7,7 @@ using Exception = System.Exception;
 
 namespace RenderStorm.Abstractions;
 
-public class RSRenderTexture : IProfilerObject, IDisposable
+public class RSRenderTarget : IProfilerObject, IDisposable
 {
     private uint _colorTexture;
     private uint _depthTexture;
@@ -21,7 +21,7 @@ public class RSRenderTexture : IProfilerObject, IDisposable
     public uint ColorTexture => _colorTexture;
     public uint DepthTexture => _depthTexture;
 
-    public RSRenderTexture(int width, int height, RSWindow win, string debugName = "RenderTexture")
+    public RSRenderTarget(int width, int height, RSWindow win, string debugName = "RenderTexture")
     {
         _nWindow = win.Native;
         DebugName = debugName;
