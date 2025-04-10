@@ -9,6 +9,110 @@ using RenderStorm.Other;
 namespace RenderStorm.HighLevel;
 
 /// <summary>
+/// Represents a frustum for efficient culling
+/// </summary>
+public struct Frustum
+{
+    // The 6 planes of the frustum (left, right, bottom, top, near, far)
+    public Vector4[] Planes;
+
+    public Frustum(Matrix4x4 viewProj)
+    {
+        Planes = new Vector4[6];
+
+        // Left plane
+        Planes[0] = new Vector4(
+            viewProj.M14 + viewProj.M11,
+            viewProj.M24 + viewProj.M21,
+            viewProj.M34 + viewProj.M31,
+            viewProj.M44 + viewProj.M41);
+
+        // Right plane
+        Planes[1] = new Vector4(
+            viewProj.M14 - viewProj.M11,
+            viewProj.M24 - viewProj.M21,
+            viewProj.M34 - viewProj.M31,
+            viewProj.M44 - viewProj.M41);
+
+        // Bottom plane
+        Planes[2] = new Vector4(
+            viewProj.M14 + viewProj.M12,
+            viewProj.M24 + viewProj.M22,
+            viewProj.M34 + viewProj.M32,
+            viewProj.M44 + viewProj.M42);
+
+        // Top plane
+        Planes[3] = new Vector4(
+            viewProj.M14 - viewProj.M12,
+            viewProj.M24 - viewProj.M22,
+            viewProj.M34 - viewProj.M32,
+            viewProj.M44 - viewProj.M42);
+
+        // Near plane
+        Planes[4] = new Vector4(
+            viewProj.M13,
+            viewProj.M23,
+            viewProj.M33,
+            viewProj.M43);
+
+        // Far plane
+        Planes[5] = new Vector4(
+            viewProj.M14 - viewProj.M13,
+            viewProj.M24 - viewProj.M23,
+            viewProj.M34 - viewProj.M33,
+            viewProj.M44 - viewProj.M43);
+
+        // Normalize all planes
+        for (int i = 0; i < 6; i++)
+        {
+            float length = (float)Math.Sqrt(Planes[i].X * Planes[i].X +
+                                          Planes[i].Y * Planes[i].Y +
+                                          Planes[i].Z * Planes[i].Z);
+            Planes[i] /= length;
+        }
+    }
+
+    /// <summary>
+    /// Tests if an AABB is inside or intersecting the frustum
+    /// </summary>
+    public bool IsAABBVisible(Vector3 aabbMin, Vector3 aabbMax)
+    {
+        // Quick sphere test first as a fast rejection
+        Vector3 center = (aabbMin + aabbMax) * 0.5f;
+        float radius = Vector3.Distance(aabbMin, aabbMax) * 0.5f;
+
+        for (int i = 0; i < 6; i++)
+        {
+            float distance = Planes[i].X * center.X +
+                            Planes[i].Y * center.Y +
+                            Planes[i].Z * center.Z +
+                            Planes[i].W;
+
+            if (distance < -radius)
+                return false; // Outside the frustum
+        }
+
+        // More precise AABB test
+        for (int i = 0; i < 6; i++)
+        {
+            Vector3 p = aabbMin;
+            if (Planes[i].X >= 0) p.X = aabbMax.X;
+            if (Planes[i].Y >= 0) p.Y = aabbMax.Y;
+            if (Planes[i].Z >= 0) p.Z = aabbMax.Z;
+
+            float d = Planes[i].X * p.X +
+                      Planes[i].Y * p.Y +
+                      Planes[i].Z * p.Z +
+                      Planes[i].W;
+
+            if (d < 0) return false; // Outside the frustum
+        }
+
+        return true; // Inside or intersecting the frustum
+    }
+}
+
+/// <summary>
 /// Allows you to control some parts of the Dispatch command in rendering
 /// </summary>
 [Flags] public enum DispatchArguments
@@ -92,58 +196,42 @@ public class CommandQueue: IDisposable
         }
 
     }
-    
+
+    private Frustum _cachedFrustum;
+    private Matrix4x4 _lastViewProjMatrix;
+    private bool _frustumDirty = true;
+
     private bool IsInViewFrustum(ICommandQueueItem item, Matrix4x4 viewProj)
     {
         if (item.AABBMin == Vector3.Zero && item.AABBMax == Vector3.Zero)
             return true;
-        
-        Vector3[] corners = new Vector3[8];
-        corners[0] = new Vector3(item.AABBMin.X, item.AABBMin.Y, item.AABBMin.Z);
-        corners[1] = new Vector3(item.AABBMax.X, item.AABBMin.Y, item.AABBMin.Z);
-        corners[2] = new Vector3(item.AABBMin.X, item.AABBMax.Y, item.AABBMin.Z);
-        corners[3] = new Vector3(item.AABBMax.X, item.AABBMax.Y, item.AABBMin.Z);
-        corners[4] = new Vector3(item.AABBMin.X, item.AABBMin.Y, item.AABBMax.Z);
-        corners[5] = new Vector3(item.AABBMax.X, item.AABBMin.Y, item.AABBMax.Z);
-        corners[6] = new Vector3(item.AABBMin.X, item.AABBMax.Y, item.AABBMax.Z);
-        corners[7] = new Vector3(item.AABBMax.X, item.AABBMax.Y, item.AABBMax.Z);
-        
-        bool inside = false;
-        foreach (var corner in corners)
+
+        // Only recalculate the frustum if the view-projection matrix has changed
+        if (_frustumDirty || viewProj != _lastViewProjMatrix)
         {
-            Vector4 clipSpace = Vector4.Transform(new Vector4(corner, 1.0f), viewProj);
-            
-            if (clipSpace.W != 0)
-            {
-                Vector3 ndc = new Vector3(clipSpace.X, clipSpace.Y, clipSpace.Z) / clipSpace.W;
-                
-                if (ndc.X >= -1 && ndc.X <= 1 &&
-                    ndc.Y >= -1 && ndc.Y <= 1 &&
-                    ndc.Z >= -1 && ndc.Z <= 1)
-                {
-                    inside = true;
-                    break;
-                }
-            }
+            _cachedFrustum = new Frustum(viewProj);
+            _lastViewProjMatrix = viewProj;
+            _frustumDirty = false;
         }
 
-        return inside;
+        // Use the optimized frustum culling
+        return _cachedFrustum.IsAABBVisible(item.AABBMin, item.AABBMax);
     }
-    
+
 
     public void Dispatch(Matrix4x4 matrix, DispatchArguments arguments = DispatchArguments.Default)
     {
         totalStopwatch.Restart();
         CommandQueueTimes.Clear();
 
-        // apply renders state only once 
+        // apply renders state only once
         OpenGL.DepthTest = DrawContext.DepthTesting;
         OpenGL.CullFace = DrawContext.CullFace;
         DrawShader?.Use();
         DrawShader?.SetUniform("m_ViewProj", matrix);
         foreach (var command in CommandQueueList)
         {
-            if(!IsInViewFrustum(command, Matrix4x4.Identity)) continue;
+            if(!IsInViewFrustum(command, matrix)) continue;
             commandStopwatch.Restart();
             command.Dispatch(matrix, DrawShader);
             commandStopwatch.Stop();
