@@ -15,6 +15,7 @@ public class RSShader : IProfilerObject, IDisposable
 {
     private bool _disposed;
     private static List<RSShader> _shaders = new List<RSShader>();
+    private Dictionary<string, int> _uniforms = new();
 
     internal static void Shutdown()
     {
@@ -138,10 +139,18 @@ public class RSShader : IProfilerObject, IDisposable
     {
         OpenGL.API.UseProgram(NativeInstance);
     }
+    
+    public int GetUniformLocation(string name)
+    {
+        if(_uniforms.ContainsKey(name))
+            return _uniforms[name];
+        _uniforms.Add(name, OpenGL.API.GetUniformLocation(NativeInstance, name));
+        return _uniforms[name];
+    }
 
     public void SetUniform(string name, float value)
     {
-        var location = OpenGL.API.GetUniformLocation(NativeInstance, name);
+        var location = GetUniformLocation(name);
         if (location != -1)
             OpenGL.API.Uniform1(location, value);
         else
@@ -150,7 +159,7 @@ public class RSShader : IProfilerObject, IDisposable
 
     public void SetUniform(string name, Vector2 value)
     {
-        var location = OpenGL.API.GetUniformLocation(NativeInstance, name);
+        var location = GetUniformLocation(name);
         if (location != -1)
             OpenGL.API.Uniform2(location, value);
         else
@@ -159,7 +168,7 @@ public class RSShader : IProfilerObject, IDisposable
     
     public void SetUniform(string name, Vector3 value)
     {
-        var location = OpenGL.API.GetUniformLocation(NativeInstance, name);
+        var location = GetUniformLocation(name);
         if (location != -1)
             OpenGL.API.Uniform3(location, value);
         else
@@ -168,7 +177,7 @@ public class RSShader : IProfilerObject, IDisposable
     
     public void SetUniform(string name, Matrix4x4 value)
     {
-        var location = OpenGL.API.GetUniformLocation(NativeInstance, name);
+        var location = GetUniformLocation(name);
         if (location != -1)
             OpenGL.API.UniformMatrix4(location, false, MemoryMarshal.CreateReadOnlySpan(ref value.M11, 16));
         else

@@ -58,6 +58,7 @@ public class CommandQueue: IDisposable
     public DrawContext DrawContext = new();
     public RSShader? DrawShader;
     public List<ICommandQueueItem> CommandQueueList = new();
+    public int DrawnItems = 0;
     internal List<long> CommandQueueTimes = new();
     internal long TotalTime = 0;
 
@@ -94,70 +95,41 @@ public class CommandQueue: IDisposable
     
     private bool IsInViewFrustum(ICommandQueueItem item, Matrix4x4 viewProj)
     {
-        // if no bounding box is set, always render
         if (item.AABBMin == Vector3.Zero && item.AABBMax == Vector3.Zero)
             return true;
-
-        Matrix4x4 model = Matrix4x4.Identity;
-
-        // Try to get the model matrix if the item is a Surface
-        if (item.GetType().IsGenericType && item.GetType().GetGenericTypeDefinition() == typeof(Surface<>))
+        
+        Vector3[] corners = new Vector3[8];
+        corners[0] = new Vector3(item.AABBMin.X, item.AABBMin.Y, item.AABBMin.Z);
+        corners[1] = new Vector3(item.AABBMax.X, item.AABBMin.Y, item.AABBMin.Z);
+        corners[2] = new Vector3(item.AABBMin.X, item.AABBMax.Y, item.AABBMin.Z);
+        corners[3] = new Vector3(item.AABBMax.X, item.AABBMax.Y, item.AABBMin.Z);
+        corners[4] = new Vector3(item.AABBMin.X, item.AABBMin.Y, item.AABBMax.Z);
+        corners[5] = new Vector3(item.AABBMax.X, item.AABBMin.Y, item.AABBMax.Z);
+        corners[6] = new Vector3(item.AABBMin.X, item.AABBMax.Y, item.AABBMax.Z);
+        corners[7] = new Vector3(item.AABBMax.X, item.AABBMax.Y, item.AABBMax.Z);
+        
+        bool inside = false;
+        foreach (var corner in corners)
         {
-            var modelProperty = item.GetType().GetProperty("Model");
-            if (modelProperty != null)
+            Vector4 clipSpace = Vector4.Transform(new Vector4(corner, 1.0f), viewProj);
+            
+            if (clipSpace.W != 0)
             {
-                model = (Matrix4x4)modelProperty.GetValue(item);
+                Vector3 ndc = new Vector3(clipSpace.X, clipSpace.Y, clipSpace.Z) / clipSpace.W;
+                
+                if (ndc.X >= -1 && ndc.X <= 1 &&
+                    ndc.Y >= -1 && ndc.Y <= 1 &&
+                    ndc.Z >= -1 && ndc.Z <= 1)
+                {
+                    inside = true;
+                    break;
+                }
             }
         }
 
-        var transformedMin = Vector3.Transform(item.AABBMin, model);
-        var transformedMax = Vector3.Transform(item.AABBMax, model);
-
-        // AABB corners
-        var corners = new[]
-        {
-            new Vector4(transformedMin.X, transformedMin.Y, transformedMin.Z, 1),
-            new Vector4(transformedMax.X, transformedMin.Y, transformedMin.Z, 1),
-            new Vector4(transformedMin.X, transformedMax.Y, transformedMin.Z, 1),
-            new Vector4(transformedMax.X, transformedMax.Y, transformedMin.Z, 1),
-            new Vector4(transformedMin.X, transformedMin.Y, transformedMax.Z, 1),
-            new Vector4(transformedMax.X, transformedMin.Y, transformedMax.Z, 1),
-            new Vector4(transformedMin.X, transformedMax.Y, transformedMax.Z, 1),
-            new Vector4(transformedMax.X, transformedMax.Y, transformedMax.Z, 1)
-        };
-
-        // transform corners to clip space
-        var transformedCorners = new Vector4[8];
-        for (int i = 0; i < 8; i++)
-        {
-            transformedCorners[i] = Vector4.Transform(corners[i], viewProj);
-        }
-
-        // check if corners are outside of frustum plane
-        // left plane
-        if (transformedCorners.All(c => c.X < -c.W)) return false;
-
-        // right plane
-        if (transformedCorners.All(c => c.X > c.W)) return false;
-
-        // bottom plane
-        if (transformedCorners.All(c => c.Y < -c.W)) return false;
-
-        // top plane
-        if (transformedCorners.All(c => c.Y > c.W)) return false;
-
-        // near plane
-        if (transformedCorners.All(c => c.Z < -c.W)) return false;
-
-        // far plane
-        if (transformedCorners.All(c => c.Z > c.W)) return false;
-
-        // at this point, AAB is inside the frustum
-        return true;
+        return inside;
     }
-
-    // batch rendering
-    private List<ICommandQueueItem> _visibleItems = new List<ICommandQueueItem>();
+    
 
     public void Dispatch(Matrix4x4 matrix, DispatchArguments arguments = DispatchArguments.Default)
     {
@@ -171,10 +143,12 @@ public class CommandQueue: IDisposable
         DrawShader?.SetUniform("m_ViewProj", matrix);
         foreach (var command in CommandQueueList)
         {
+            if(!IsInViewFrustum(command, Matrix4x4.Identity)) continue;
             commandStopwatch.Restart();
             command.Dispatch(matrix, DrawShader);
             commandStopwatch.Stop();
             CommandQueueTimes.Add(commandStopwatch.ElapsedMilliseconds);
+            DrawnItems++;
         }
 
         totalStopwatch.Stop();

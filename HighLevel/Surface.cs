@@ -12,13 +12,19 @@ public class Surface<T>: ICommandQueueItem where T : unmanaged
     public Vector3 AABBMin { get; set; }
     public Vector3 AABBMax { get; set; }
 
-    private readonly RSVertexArray<T> _array;
+    private RSVertexArray<T> _array;
 
     public Surface(ReadOnlySpan<T> vertices, ReadOnlySpan<uint> indices, string debugName)
     {
         DebugName = debugName;
         Model = Matrix4x4.Identity;
         _array = new RSVertexArray<T>(vertices, indices);
+    }
+    public Surface(RSVertexArray<T> array, string debugName)
+    {
+        DebugName = debugName;
+        Model = Matrix4x4.Identity;
+        _array = array;
     }
     public void Dispatch(Matrix4x4 matrix, RSShader? shader)
     {
