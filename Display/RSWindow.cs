@@ -11,10 +11,10 @@ namespace RenderStorm.Display;
 
 public class RSWindow: IDisposable
 {
-    internal static RSWindow Instance;
+    public static RSWindow Instance;
     private string _title = "Game";
     public GL API;
-    internal readonly Window Native;
+    public readonly Window Native;
     public Action ViewBegin;
     public Action ViewEnd;
     public Action<double> ViewUpdate;
