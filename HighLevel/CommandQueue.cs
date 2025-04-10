@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Numerics;
+using RenderStorm.Abstractions;
 using RenderStorm.Display;
 using RenderStorm.Other;
 
@@ -38,7 +39,7 @@ public interface ICommandQueueItem: IDisposable
     /// Used for culling and other operations
     /// </summary>
     public Vector3 AABBMax { get; set; }
-    public void Dispatch(Matrix4x4 matrix);
+    public void Dispatch(Matrix4x4 matrix, RSShader? shader);
 }
 
 public struct DrawContext
@@ -55,6 +56,7 @@ public class CommandQueue: IDisposable
 {
     public readonly string DebugName = "Queue";
     public DrawContext DrawContext = new();
+    public RSShader? DrawShader;
     public List<ICommandQueueItem> CommandQueueList = new();
     internal List<long> CommandQueueTimes = new();
     internal long TotalTime = 0;
@@ -63,8 +65,9 @@ public class CommandQueue: IDisposable
     private readonly Stopwatch commandStopwatch = new Stopwatch();
 
 
-    public CommandQueue(string debugName)
+    public CommandQueue(string debugName, RSShader rsshader)
     {
+        DrawShader = rsshader;
         DebugName = debugName;
         RSDebugger.Queues.Add(this);
         RSDebugger.QueueNames.Add(DebugName);
@@ -154,47 +157,24 @@ public class CommandQueue: IDisposable
     }
 
     // batch rendering
-    private const int BATCH_SIZE = 64;
     private List<ICommandQueueItem> _visibleItems = new List<ICommandQueueItem>();
 
     public void Dispatch(Matrix4x4 matrix, DispatchArguments arguments = DispatchArguments.Default)
     {
         totalStopwatch.Restart();
         CommandQueueTimes.Clear();
-        _visibleItems.Clear();
-
-        // first pass: frustum culling
-        foreach (var command in CommandQueueList)
-        {
-            if (IsInViewFrustum(command, matrix))
-            {
-                _visibleItems.Add(command);
-            }
-            else
-            {
-                // maintain index correspondence
-                CommandQueueTimes.Add(0);
-            }
-        }
 
         // apply renders state only once 
         OpenGL.DepthTest = DrawContext.DepthTesting;
         OpenGL.CullFace = DrawContext.CullFace;
-
-        // second pass: batch rendering
-        for (int i = 0; i < _visibleItems.Count; i += BATCH_SIZE)
+        DrawShader?.Use();
+        DrawShader?.SetUniform("m_ViewProj", matrix);
+        foreach (var command in CommandQueueList)
         {
-            int batchEnd = Math.Min(i + BATCH_SIZE, _visibleItems.Count);
-
-            // batch process
-            for (int j = i; j < batchEnd; j++)
-            {
-                var command = _visibleItems[j];
-                commandStopwatch.Restart();
-                command.Dispatch(matrix);
-                commandStopwatch.Stop();
-                CommandQueueTimes.Add(commandStopwatch.ElapsedMilliseconds);
-            }
+            commandStopwatch.Restart();
+            command.Dispatch(matrix, DrawShader);
+            commandStopwatch.Stop();
+            CommandQueueTimes.Add(commandStopwatch.ElapsedMilliseconds);
         }
 
         totalStopwatch.Stop();
