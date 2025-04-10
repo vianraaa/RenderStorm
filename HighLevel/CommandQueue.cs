@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Numerics;
+using RenderStorm.Abstractions;
 using RenderStorm.Display;
 using RenderStorm.Other;
 
@@ -38,7 +39,7 @@ public interface ICommandQueueItem: IDisposable
     /// Used for culling and other operations
     /// </summary>
     public Vector3 AABBMax { get; set; }
-    public void Dispatch(Matrix4x4 matrix);
+    public void Dispatch(Matrix4x4 matrix, RSShader? shader);
 }
 
 public struct DrawContext
@@ -55,6 +56,7 @@ public class CommandQueue: IDisposable
 {
     public readonly string DebugName = "Queue";
     public DrawContext DrawContext = new();
+    public RSShader? DrawShader;
     internal List<ICommandQueueItem> CommandQueueList = new();
     internal List<long> CommandQueueTimes = new();
     internal long TotalTime = 0;
@@ -63,8 +65,9 @@ public class CommandQueue: IDisposable
     private readonly Stopwatch commandStopwatch = new Stopwatch();
 
 
-    public CommandQueue(string debugName)
+    public CommandQueue(string debugName, RSShader rsshader)
     {
+        DrawShader = rsshader;
         DebugName = debugName;
         RSDebugger.Queues.Add(this);
         RSDebugger.QueueNames.Add(DebugName);
@@ -96,10 +99,12 @@ public class CommandQueue: IDisposable
         // apply our draw context before dispatching
         OpenGL.DepthTest = DrawContext.DepthTesting;
         OpenGL.CullFace = DrawContext.CullFace;
+        DrawShader?.Use();
+        DrawShader?.SetUniform("m_ViewProj", matrix);
         foreach (var command in CommandQueueList)
         {
             commandStopwatch.Restart();
-            command.Dispatch(matrix);
+            command.Dispatch(matrix, DrawShader);
             commandStopwatch.Stop();
             CommandQueueTimes.Add(commandStopwatch.ElapsedMilliseconds);
         }
