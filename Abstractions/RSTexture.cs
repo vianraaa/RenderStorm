@@ -1,4 +1,3 @@
-using System;
 using RenderStorm.Other;
 using Silk.NET.OpenGL;
 
@@ -25,7 +24,6 @@ public struct RSTextureCreationSettings(
 public class RSTexture : IProfilerObject, IDisposable
 {
     private bool _disposed;
-
     public RSTexture(int width, int height, byte[] pixelData = null, RSTextureCreationSettings creationSettings = new(),
         string debugName = "Texture")
     {
