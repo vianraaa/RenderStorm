@@ -18,7 +18,7 @@ namespace RenderStorm.HighLevel;
     /// </summary>
     Default = 1,
     /// <summary>
-    /// Generally used in XR, unless switched in shader code. 
+    /// Generally used in XR, unless switched in shader code.
     /// In that case, avoid using this value.
     /// </summary>
     SwitchViewProjection
@@ -57,10 +57,10 @@ public class CommandQueue: IDisposable
     public readonly string DebugName = "Queue";
     public DrawContext DrawContext = new();
     public RSShader? DrawShader;
-    internal List<ICommandQueueItem> CommandQueueList = new();
+    public List<ICommandQueueItem> CommandQueueList = new();
     internal List<long> CommandQueueTimes = new();
     internal long TotalTime = 0;
-    
+
     private readonly Stopwatch totalStopwatch = new Stopwatch();
     private readonly Stopwatch commandStopwatch = new Stopwatch();
 
@@ -89,14 +89,82 @@ public class CommandQueue: IDisposable
         {
             Dispatch(view * proj, arguments);
         }
-        
+
     }
+    
+    private bool IsInViewFrustum(ICommandQueueItem item, Matrix4x4 viewProj)
+    {
+        // if no bounding box is set, always render
+        if (item.AABBMin == Vector3.Zero && item.AABBMax == Vector3.Zero)
+            return true;
+
+        Matrix4x4 model = Matrix4x4.Identity;
+
+        // Try to get the model matrix if the item is a Surface
+        if (item.GetType().IsGenericType && item.GetType().GetGenericTypeDefinition() == typeof(Surface<>))
+        {
+            var modelProperty = item.GetType().GetProperty("Model");
+            if (modelProperty != null)
+            {
+                model = (Matrix4x4)modelProperty.GetValue(item);
+            }
+        }
+
+        var transformedMin = Vector3.Transform(item.AABBMin, model);
+        var transformedMax = Vector3.Transform(item.AABBMax, model);
+
+        // AABB corners
+        var corners = new[]
+        {
+            new Vector4(transformedMin.X, transformedMin.Y, transformedMin.Z, 1),
+            new Vector4(transformedMax.X, transformedMin.Y, transformedMin.Z, 1),
+            new Vector4(transformedMin.X, transformedMax.Y, transformedMin.Z, 1),
+            new Vector4(transformedMax.X, transformedMax.Y, transformedMin.Z, 1),
+            new Vector4(transformedMin.X, transformedMin.Y, transformedMax.Z, 1),
+            new Vector4(transformedMax.X, transformedMin.Y, transformedMax.Z, 1),
+            new Vector4(transformedMin.X, transformedMax.Y, transformedMax.Z, 1),
+            new Vector4(transformedMax.X, transformedMax.Y, transformedMax.Z, 1)
+        };
+
+        // transform corners to clip space
+        var transformedCorners = new Vector4[8];
+        for (int i = 0; i < 8; i++)
+        {
+            transformedCorners[i] = Vector4.Transform(corners[i], viewProj);
+        }
+
+        // check if corners are outside of frustum plane
+        // left plane
+        if (transformedCorners.All(c => c.X < -c.W)) return false;
+
+        // right plane
+        if (transformedCorners.All(c => c.X > c.W)) return false;
+
+        // bottom plane
+        if (transformedCorners.All(c => c.Y < -c.W)) return false;
+
+        // top plane
+        if (transformedCorners.All(c => c.Y > c.W)) return false;
+
+        // near plane
+        if (transformedCorners.All(c => c.Z < -c.W)) return false;
+
+        // far plane
+        if (transformedCorners.All(c => c.Z > c.W)) return false;
+
+        // at this point, AAB is inside the frustum
+        return true;
+    }
+
+    // batch rendering
+    private List<ICommandQueueItem> _visibleItems = new List<ICommandQueueItem>();
 
     public void Dispatch(Matrix4x4 matrix, DispatchArguments arguments = DispatchArguments.Default)
     {
         totalStopwatch.Restart();
         CommandQueueTimes.Clear();
-        // apply our draw context before dispatching
+
+        // apply renders state only once 
         OpenGL.DepthTest = DrawContext.DepthTesting;
         OpenGL.CullFace = DrawContext.CullFace;
         DrawShader?.Use();
@@ -108,6 +176,7 @@ public class CommandQueue: IDisposable
             commandStopwatch.Stop();
             CommandQueueTimes.Add(commandStopwatch.ElapsedMilliseconds);
         }
+
         totalStopwatch.Stop();
         TotalTime = totalStopwatch.ElapsedMilliseconds;
     }
@@ -116,12 +185,12 @@ public class CommandQueue: IDisposable
     {
         CommandQueueList.Add(item);
     }
-    
+
     public void Remove(ICommandQueueItem item)
     {
         CommandQueueList.Remove(item);
     }
-    
+
     public void Dispose()
     {
         RSDebugger.Queues.Remove(this);
