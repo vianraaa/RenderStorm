@@ -12,9 +12,24 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="glfw-net" Version="3.3.1"/>
         <PackageReference Include="ImGui.NET" Version="1.91.6.1"/>
-        <PackageReference Include="Silk.NET.OpenGL" Version="2.22.0"/>
+        <PackageReference Include="ppy.SDL2-CS" Version="1.0.741-alpha" />
+        <PackageReference Include="Vortice.D3DCompiler" Version="3.7.4-beta" />
+        <PackageReference Include="Vortice.Direct3D11" Version="3.6.2" />
+        <PackageReference Include="Vortice.Dxc" Version="3.7.4-beta" />
+        <PackageReference Include="Vortice.DXGI" Version="3.7.4-beta" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Remove="HighLevel\**" />
+      <Compile Remove="Other\**" />
+      <Compile Remove="StormTest\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Remove="HighLevel\**" />
+      <None Remove="Other\**" />
+      <None Remove="StormTest\**" />
     </ItemGroup>
 
 </Project>

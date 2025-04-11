@@ -1,97 +1,70 @@
 using System;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using RenderStorm.Other;
 using RenderStorm.Types;
-using Silk.NET.OpenGL;
+using Vortice.Direct3D;
+using Vortice.Direct3D11;
+using Vortice.DXGI;
 
 namespace RenderStorm.Abstractions;
 
-public class RSVertexArray<T> : IProfilerObject, IDrawableArray, IDisposable where T : unmanaged
-{
-    private bool _disposed;
-    private readonly RSBuffer<uint>? _indexBuffer;
-    private readonly RSBuffer<T>? _vertexBuffer;
-    public string VertexBufferName => $"{_vertexBuffer.DebugName}({_vertexBuffer.NativeInstance})";
-    public string IndexBufferName => $"{_indexBuffer.DebugName}({_indexBuffer.NativeInstance})";
-    public int VertexBufferIndex => (int)_vertexBuffer.NativeInstance;
-    public int IndexBufferIndex => (int)_indexBuffer.NativeInstance;
-
-    public RSVertexArray(ReadOnlySpan<T> vertices, ReadOnlySpan<uint> indices, string debugName = "VertexArray")
+public class RSVertexArray<T> : IDrawableArray, IDisposable where T : unmanaged
     {
-        DebugName = debugName;
-        _vertexBuffer = new RSBuffer<T>(BufferTargetARB.ArrayBuffer, vertices);
-        _indexBuffer = new RSBuffer<uint>(BufferTargetARB.ElementArrayBuffer, indices);
+        private bool _disposed;
+        private readonly RSBuffer<uint>? _indexBuffer;
+        private readonly RSBuffer<T>? _vertexBuffer;
+        private ID3D11InputLayout? _inputLayout;
+        private readonly ID3D11Device _device;
+        private RSShader _shader;
+        public string DebugName { get; }
 
-        NativeInstance = OpenGL.API.GenVertexArray();
-        Bind();
-        EnableVertexAttributes();
-        Unbind();
-        RSDebugger.VertexArrayCount++;
-        RSDebugger.VertexArrays.Add(this);
-    }
-
-    public void Dispose()
-    {
-        if (!_disposed)
+        public RSVertexArray(ID3D11Device device, ReadOnlySpan<T> vertices, ReadOnlySpan<uint> indices, RSShader shader, string debugName = "VertexArray")
         {
-            RSDebugger.VertexArrayCount--;
-            RSDebugger.VertexArrays.Remove(this);
-            _indexBuffer?.Dispose();
-            _vertexBuffer?.Dispose();
-            OpenGL.API.DeleteVertexArray(NativeInstance);
-            _disposed = true;
+            _shader = shader;
+            _device = device;
+            DebugName = debugName;
+            
+            _vertexBuffer = new RSBuffer<T>(device, vertices, BindFlags.VertexBuffer, debugName);
+            _indexBuffer = new RSBuffer<uint>(device, indices, BindFlags.IndexBuffer, debugName);
+            
+            CreateInputLayout();
         }
-    }
 
-    public void Bind()
-    {
-        OpenGL.API.BindVertexArray(NativeInstance);
-        _vertexBuffer?.Bind();
-        _indexBuffer?.Bind();
-    }
-
-    public unsafe void DrawIndexed()
-    {
-        Bind();
-        OpenGL.API.DrawElements(PrimitiveType.Triangles, (uint)_indexBuffer.ItemCount, DrawElementsType.UnsignedInt,
-            (void*)0);
-        Unbind();
-    }
-
-    public void Unbind()
-    {
-        OpenGL.API.BindVertexArray(0);
-    }
-
-    private void EnableVertexAttributes()
-    {
-        if (_vertexBuffer == null) return;
-
-        var fields = typeof(T).GetFields(BindingFlags.Public | BindingFlags.Instance);
-        var attributeLocation = 0;
-        var offset = 0;
-
-        foreach (var field in fields)
+        private void CreateInputLayout()
         {
-            if (field.FieldType == typeof(Vec3))
+            _inputLayout = _shader.InputLayout;
+        }
+
+        public void Dispose()
+        {
+            if (!_disposed)
             {
-                var numElements = 3;
-                OpenGL.API.VertexAttribPointer((uint)attributeLocation, numElements, VertexAttribPointerType.Float,
-                    false, (uint)Marshal.SizeOf<T>(), offset);
-                OpenGL.API.EnableVertexAttribArray((uint)attributeLocation);
-                offset += numElements * sizeof(float);
-                attributeLocation++;
-            }
-            else if (field.FieldType == typeof(Vec2))
-            {
-                var numElements = 2;
-                OpenGL.API.VertexAttribPointer((uint)attributeLocation, numElements, VertexAttribPointerType.Float,
-                    false, (uint)Marshal.SizeOf<T>(), offset);
-                OpenGL.API.EnableVertexAttribArray((uint)attributeLocation);
-                offset += numElements * sizeof(float);
-                attributeLocation++;
+                _indexBuffer?.Dispose();
+                _vertexBuffer?.Dispose();
+                _inputLayout?.Dispose();
+                _disposed = true;
             }
         }
+
+        public void Bind(ID3D11DeviceContext context)
+        {
+            _shader.Use();
+            context.IASetInputLayout(_inputLayout);
+            _vertexBuffer?.Bind(context);
+            _indexBuffer?.Bind(context);
+        }
+
+        public void Unbind(ID3D11DeviceContext context)
+        {
+            _vertexBuffer?.Unbind(context);
+            _indexBuffer?.Unbind(context);
+        }
+
+        public void DrawIndexed(ID3D11DeviceContext context)
+        {
+            Bind(context);
+            context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+            context.DrawIndexed((uint)_indexBuffer.ItemCount, 0, 0);
+            Unbind(context);
+        }
     }
-}

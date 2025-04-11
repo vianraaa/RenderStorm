@@ -1,7 +1,9 @@
 using System;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using RenderStorm.Other;
-using Silk.NET.OpenGL;
+using Vortice.Direct3D11;
+using Vortice.DXGI;
+using MapFlags = Vortice.Direct3D11.MapFlags;
 
 namespace RenderStorm.Abstractions;
 
@@ -10,68 +12,70 @@ public interface ITypedBuffer
     public Type StoredType { get; }
     public int ItemCount { get; }
     public int Size { get; }
-    public BufferTargetARB Target { get; }
 }
 
-public class RSBuffer<T> : IProfilerObject, ITypedBuffer, IDisposable where T : unmanaged
+public class RSBuffer<T> : ITypedBuffer, IDisposable where T : unmanaged
 {
     private bool _disposed;
+    private ID3D11Buffer _buffer;
 
-    public RSBuffer(BufferTargetARB target, ReadOnlySpan<T> data, BufferUsageARB usage = BufferUsageARB.StaticDraw,
-        string debugName = "Buffer")
+    public unsafe RSBuffer(ID3D11Device device, ReadOnlySpan<T> data, BindFlags bindFlags, string debugName = "Buffer")
     {
         DebugName = debugName;
-        Target = target;
-        NativeInstance = OpenGL.API.GenBuffer();
-        Bind();
-        OpenGL.API.BufferData(Target, data, usage);
+        BindFlags = bindFlags;
+            
+        var bufferDesc = new BufferDescription
+        {
+            ByteWidth = (uint)(data.Length * Marshal.SizeOf<T>()),
+            BindFlags = bindFlags,
+            Usage = ResourceUsage.Default,
+            CPUAccessFlags = CpuAccessFlags.None
+        };
+
+        var initialData = new SubresourceData
+        {
+            DataPointer = (IntPtr)Unsafe.AsPointer(ref data)
+        };
+            
+        device.CreateBuffer(bufferDesc, initialData, out _buffer);
+            
         ItemCount = data.Length;
         Size = data.Length * Marshal.SizeOf<T>();
-        RSDebugger.BufferCount++;
-        RSDebugger.Buffers.Add(this);
     }
 
-    public uint Handle => NativeInstance;
+    public string DebugName { get; set; }
+    public BindFlags BindFlags { get; }
+    public int ItemCount { get; private set; }
+    public int Size { get; private set; }
+    public Type StoredType => typeof(T);
 
     public void Dispose()
     {
         if (!_disposed)
         {
-            RSDebugger.BufferCount--;
-            RSDebugger.Buffers.Remove(this);
-            OpenGL.API.DeleteBuffer(NativeInstance);
+            _buffer?.Dispose();
             _disposed = true;
         }
     }
 
-    public int ItemCount { get; private set; }
-    public int Size { get; private set; }
-    public BufferTargetARB Target { get; }
-
-    public Type StoredType => typeof(T);
-
-    public void Bind()
+    public void Bind(ID3D11DeviceContext context)
     {
-        OpenGL.API.BindBuffer(Target, NativeInstance);
-    }
-
-    public void Unbind()
-    {
-        OpenGL.API.BindBuffer(Target, 0);
-    }
-
-    public void UpdateData(ReadOnlySpan<T> data, int offset = 0)
-    {
-        Bind();
-        var size = (nuint)(data.Length * Marshal.SizeOf<T>());
-        Size = data.Length * Marshal.SizeOf<T>();
-        ItemCount = data.Length;
-        unsafe
+        if (BindFlags.HasFlag(BindFlags.VertexBuffer))
         {
-            fixed (void* ptr = data)
-            {
-                OpenGL.API.BufferSubData(Target, offset, size, ptr);
-            }
+            context.IASetVertexBuffers(0, new[] { _buffer }, new[] { (uint)Marshal.SizeOf<T>() }, [0]);
         }
+        else if (BindFlags.HasFlag(BindFlags.IndexBuffer))
+        {
+            context.IASetIndexBuffer(_buffer, Format.R32_UInt, 0);
+        }
+    }
+
+
+    public void Unbind(ID3D11DeviceContext context)
+    {
+        if(BindFlags.HasFlag(BindFlags.VertexBuffer))
+            context.IASetVertexBuffers(0, [null], new uint[1], new uint[1]);
+        else if(BindFlags.HasFlag(BindFlags.IndexBuffer))
+            context.IASetIndexBuffer(null, Format.R32_UInt, (uint)Marshal.SizeOf<T>());
     }
 }
