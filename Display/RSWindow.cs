@@ -28,11 +28,22 @@ public class RSWindow: IDisposable
     #else
     public bool DebugString = false;
     #endif
-    
-    public string CachePath = Path.GetFullPath(".renderstorm");
+
+    private string _cachePath;
+
+    public string CachePath
+    {
+        get => _cachePath;
+        set
+        {
+            _cachePath = value;
+            Directory.CreateDirectory(Path.GetFullPath(_cachePath));
+        }
+    }
 
     public RSWindow(string title = "Game", int width = 1024, int height = 600)
     {
+        CachePath = Path.GetFullPath(".renderstorm");
         Instance = this;
         Glfw.Init();
         Glfw.WindowHint(Hint.ContextVersionMajor, 3);
