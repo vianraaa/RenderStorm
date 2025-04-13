@@ -3,6 +3,7 @@ using System.Text;
 using ImGuiNET;
 using RenderStorm.ImGuiImpl;
 using RenderStorm.Other;
+using RenderStorm.Profiling;
 using SDL2;
 
 namespace RenderStorm.Display
@@ -19,6 +20,7 @@ namespace RenderStorm.Display
         public string CleanInfo { get; }
 
         public bool DebuggerOpen = false;
+        public bool ProfilerOpen = false;
 #if DEBUG
         public bool DebugString = true;
 #else
@@ -100,6 +102,7 @@ namespace RenderStorm.Display
             D3dDeviceContainer.InitializeRenderStates();
             while (Running)
             {
+                Profiler.FrameBegin();
                 SDL.SDL_GetWindowSize(Native, out var width, out var height);
                 SDL.SDL_Event e;
                 while (SDL.SDL_PollEvent(out e) != 0)
@@ -113,6 +116,8 @@ namespace RenderStorm.Display
                         case SDL.SDL_EventType.SDL_KEYUP:
                             if(e.key.keysym.sym == SDL.SDL_Keycode.SDLK_F2)
                                 DebuggerOpen = !DebuggerOpen;
+                            else if(e.key.keysym.sym == SDL.SDL_Keycode.SDLK_F1)
+                                ProfilerOpen = !ProfilerOpen;
                             break;
                         case SDL.SDL_EventType.SDL_WINDOWEVENT:
                             if (e.window.windowEvent == SDL.SDL_WindowEventID.SDL_WINDOWEVENT_RESIZED)
@@ -134,24 +139,28 @@ namespace RenderStorm.Display
                 D3dDeviceContainer.ApplyRenderStates();
                 D3dDeviceContainer.SetRenderTargets();
                 D3dDeviceContainer.Clear(0f, 0f, 0f, 1.0f);
+                Profiler.PushExecution("View Update");
                 ViewUpdate?.Invoke(deltaTime);
+                Profiler.PopExecution();
                 RSDebugger.DeltaTime = deltaTime;
                 RSDebugger.TimeElapsed += deltaTime;
 
                 if (DebuggerOpen)
-                {
                     RSDebugger.DrawDebugger(D3dDeviceContainer);
-                }
+                if (ProfilerOpen)
+                    Profiler.DrawStack();
                     
                 if(DebugString)
                     RSDebugger.DrawDebugText($"{RSDebugger.RSVERSION}\n" +
                                              $"{CleanInfo} DirectX 11\n" +
                                              $"{(int)(1.0f / deltaTime)}fps");
+                Profiler.PushExecution("ImGui Render");
                 ImGui.Render();
                 unsafe
                 {
                     ImGuiDx11Impl.ImGui_ImplDX11_RenderDrawData(ImGui.GetDrawData());
                 }
+                Profiler.PopExecution();
                 D3dDeviceContainer.Present();
             }
             ViewEnd?.Invoke();
