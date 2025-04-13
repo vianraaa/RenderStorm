@@ -17,19 +17,17 @@ public class RSVertexArray<T> :  IProfilerObject, IDrawableArray, IDisposable wh
         private readonly RSBuffer<T>? _vertexBuffer;
         private ID3D11InputLayout? _inputLayout;
         private readonly ID3D11Device _device;
-        private RSShader<T> _shader;
 
-        public RSVertexArray(ID3D11Device device, ReadOnlySpan<T> vertices, ReadOnlySpan<uint> indices, RSShader<T> shader,
+        public RSVertexArray(ID3D11Device device, ReadOnlySpan<T> vertices, ReadOnlySpan<uint> indices, ID3D11InputLayout layout,
             string debugName = "VertexArray")
         {
-            _shader = shader;
             _device = device;
             DebugName = debugName;
 
             _vertexBuffer = new RSBuffer<T>(device, vertices, BindFlags.VertexBuffer, debugName: debugName + "_vertexBuffer");
             _indexBuffer = new RSBuffer<uint>(device, indices, BindFlags.IndexBuffer, debugName: debugName + "_indexBuffer");
 
-            _inputLayout = _shader.InputLayout;
+            _inputLayout = layout;
             RSDebugger.VertexArrays.Add(this);
         }
 
@@ -47,7 +45,6 @@ public class RSVertexArray<T> :  IProfilerObject, IDrawableArray, IDisposable wh
 
         public void Bind(D3D11DeviceContainer context)
         {
-            _shader.Use(context);
             _vertexBuffer?.BindAsVertexBuffer(context);
             _indexBuffer?.BindAsIndexBuffer(context);
         }

@@ -23,7 +23,6 @@ class Program
     static void Main(string[] args)
     {
         using RSWindow win = new RSWindow();
-        List<RSTexture> textures = new List<RSTexture>();
         win.ViewBegin += () =>
         {
             testShader = new RSShader<TestVertex>(win.D3dDeviceContainer.Device, 
@@ -68,18 +67,8 @@ float4 frag(VertexOut input) : SV_Target
             ], 
                 [
                     0, 1, 2
-            ], testShader);
-
-            for (int i = 0; i < 25; i++)
-            {
-                textures.Add(new RSTexture(win.D3dDeviceContainer.Device, 2, 2, [
-                    0xff, 0x00, 0x00, 0xff, 0x00, 0x00, 0xff, 0xff,
-                    0x00, 0x00, 0xff, 0xff, 0xff, 0x00, 0x00, 0xff,
-                ], new TextureCreationSettings{Filtering = TextureFiltering.Nearest, 
-                    AddressMode = TextureAddressMode.Clamp, IsDynamic = false,
-                    HasMipmaps = false
-                }));
-            }
+            ], testShader.InputLayout);
+            
             D3D11State.DepthClipEnable = true;
             D3D11State.DepthWriteEnabled = true;
             D3D11State.DepthTestEnabled = true;
@@ -89,10 +78,6 @@ float4 frag(VertexOut input) : SV_Target
         {
             testArray.Dispose();
             testShader?.Dispose();
-            foreach (var tex in textures)
-            {
-                tex.Dispose();
-            }
         };
         double spin = 0.0f;
         MatrixBufferData data = new MatrixBufferData();
@@ -104,7 +89,8 @@ float4 frag(VertexOut input) : SV_Target
             Matrix4x4 drawMatrix = Matrix4x4.CreateRotationY((float)spin) * projView;
                                    
             data.WorldViewProjection = drawMatrix;
-            testShader.SetUniform(win.D3dDeviceContainer, 0, data);
+            testShader.Use(win.D3dDeviceContainer);
+            testShader.SetCBuffer(win.D3dDeviceContainer, 0, data);
             testArray.DrawIndexed(win.D3dDeviceContainer);
         };
         win.Run();

@@ -161,7 +161,7 @@ public class RSShader : IProfilerObject, IDisposable
         return buffer;
     }
 
-    public unsafe void SetUniform<TUniform>(D3D11DeviceContainer container, uint slot, TUniform value)
+    public unsafe void SetCBuffer<TUniform>(D3D11DeviceContainer container, uint slot, TUniform value)
     {
         var context = container.Context;
         if (_disposed)

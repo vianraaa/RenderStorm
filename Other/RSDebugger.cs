@@ -3,8 +3,18 @@ using System.Numerics;
 using ImGuiNET;
 using RenderStorm.Abstractions;
 using RenderStorm.Display;
+using RenderStorm.ImGuiImpl;
 
 namespace RenderStorm.Other;
+
+public struct DebugAttribs
+{
+    public Vector2 POSITION;
+}
+public struct DebugConstantBuffer
+{
+    public Matrix4x4 worldViewProjection;
+}
 
 public static class RSDebugger
 {
@@ -29,14 +39,83 @@ public static class RSDebugger
     public static double DeltaTime { get; internal set; }
     public const string RSVERSION = "RENDERSTORM 0.1.1";
     public static RSWindow RSWindow { get; private set; }
+    private static RSRenderTarget? _arrayTexture;
+    private static RSShader? _arrayShader;
+
+    private static float _previewCamZoom = 1;
+    private static float _previewCamZoomTarget = 1;
+    private static DebugConstantBuffer _previewConstantBuffer = new();
+
+    private static void onScroll(float delta)
+    {
+        if(!ImGuiSdlInput.CanScroll)
+            _previewCamZoomTarget -= delta / 10f;
+    }
     public static void Init(RSWindow window)
     {
+        ImGuiSdlInput.OnScroll += onScroll;
+        _arrayTexture = new RSRenderTarget(window, 256, 256);
+        RenderTargets.Remove(_arrayTexture);
+        _arrayTexture?.Begin();
+        _arrayTexture?.End();
+        _arrayShader = new RSShader<DebugAttribs>(window.D3dDeviceContainer.Device, @"
+cbuffer DebugConstantBuffer : register(b0)
+{
+    row_major float4x4 worldViewProjection;
+}
+
+struct VertexIn
+{
+    float3 POSITION : POSITION;
+};
+
+struct VertexOut
+{
+    float4 POSITION : SV_POSITION;
+    float3 COLOR : COLOR;
+};
+
+uint hash(uint x) {
+    x ^= x >> 16;
+    x *= uint(0x7feb352d);
+    x ^= x >> 15;
+    x *= uint(0x846ca68b);
+    x ^= x >> 16;
+    return x;
+}
+
+float3 idToColor(int id) {
+    uint h = hash(uint(id));
+    float r = float((h & 0xFF0000u) >> uint(16)) / 255.0f;
+    float g = float((h & 0x00FF00u) >> uint(8)) / 255.0f;
+    float b = float((h & 0x0000FFu)) / 255.0f;
+    return float3(r, g, b);
+}
+
+VertexOut vert(VertexIn input, uint vertexID : SV_VertexID)
+{
+    VertexOut output;
+    
+    output.POSITION = mul(float4(input.POSITION, 1.0f), worldViewProjection);
+    output.COLOR = idToColor(vertexID);
+    
+    return output;
+}
+
+float4 frag(VertexOut input) : SV_Target
+{
+    return float4(input.COLOR, 1.0f);
+}
+");
+        Shaders.Remove(_arrayShader);
         RSWindow = window;
     }
 
     public static void Dispose()
     {
-        // _arrayShader?.Dispose(); // shader lifetime is managed by the engine
+        ImGuiSdlInput.OnScroll -= onScroll;
+        _arrayTexture?.Dispose();
+        _arrayShader?.Dispose();
     }
     
     /// <summary>
@@ -130,11 +209,34 @@ public static class RSDebugger
             }
             foreach (var obj in VertexArrays)
             {
-                var buf = obj as IDrawableArray;
+                var buf = (IDrawableArray)obj;
                 ImGui.BeginChild($"{obj.DebugName}{obj.NativeInstance}", new Vector2(ImGui.GetContentRegionAvail().X, 0),
                     ImGuiChildFlags.AlwaysAutoResize | ImGuiChildFlags.AutoResizeY | ImGuiChildFlags.FrameStyle);
                 ImGui.Text($"{obj.DebugName}({obj.NativeInstance})");
                 ImGui.EndChild();
+                if (ImGui.BeginItemTooltip())
+                {
+                    _previewCamZoom = float.Lerp(_previewCamZoom, _previewCamZoomTarget, (float)(DeltaTime * 8));
+                    ImGuiSdlInput.CanScroll = false;
+                    ImGui.SeparatorText(obj.DebugName);
+                    _arrayTexture.Begin();
+                    _arrayShader.Use(device);
+                    Matrix4x4 projection = Matrix4x4.CreatePerspectiveFieldOfView(1.6f, 1, 0.01f, 1000);
+                    float angle = (float)TimeElapsed;
+                    Vector3 eye = Vector3.Transform(new Vector3(0, 0.5f, 1) * _previewCamZoom, Matrix4x4.CreateRotationY(angle));
+                    Matrix4x4 view = Matrix4x4.CreateLookAt(eye, Vector3.Zero, Vector3.UnitY);
+                    _previewConstantBuffer.worldViewProjection = view * projection;
+                    _arrayShader.Use(device);
+                    _arrayShader.SetCBuffer(device, 0, _previewConstantBuffer);
+                    buf.DrawIndexed(device);
+                    _arrayTexture.End();
+                    ImGui.Image((IntPtr)_arrayTexture?.ColorShaderResourceView.NativePointer, new Vector2(256, 256));
+                    ImGui.EndTooltip();
+                }
+                else
+                {
+                    ImGuiSdlInput.CanScroll = true;
+                }
             }
 
             ImGui.PopStyleVar();
@@ -173,7 +275,6 @@ public static class RSDebugger
             ImGui.PopStyleVar();
             ImGui.Spacing();
         }
-
         ImGui.Separator();
         if (ImGui.CollapsingHeader("Textures", ImGuiTreeNodeFlags.DefaultOpen))
         {
