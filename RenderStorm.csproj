@@ -19,15 +19,11 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Compile Remove="Other\**" />
       <Compile Remove="StormTest\**" />
-      <Compile Remove="HighLevel\**" />
     </ItemGroup>
 
     <ItemGroup>
-      <None Remove="Other\**" />
       <None Remove="StormTest\**" />
-      <None Remove="HighLevel\**" />
       <None Update="cimgui.dll">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>

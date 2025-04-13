@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using RenderStorm.Display;
+using RenderStorm.Other;
 using RenderStorm.Types;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
@@ -9,7 +10,7 @@ using Vortice.DXGI;
 
 namespace RenderStorm.Abstractions;
 
-public class RSVertexArray<T> : IDrawableArray, IDisposable where T : unmanaged
+public class RSVertexArray<T> :  IProfilerObject, IDrawableArray, IDisposable where T : unmanaged
     {
         private bool _disposed;
         private readonly RSBuffer<uint>? _indexBuffer;
@@ -17,7 +18,6 @@ public class RSVertexArray<T> : IDrawableArray, IDisposable where T : unmanaged
         private ID3D11InputLayout? _inputLayout;
         private readonly ID3D11Device _device;
         private RSShader<T> _shader;
-        public string DebugName { get; }
 
         public RSVertexArray(ID3D11Device device, ReadOnlySpan<T> vertices, ReadOnlySpan<uint> indices, RSShader<T> shader,
             string debugName = "VertexArray")
@@ -26,16 +26,18 @@ public class RSVertexArray<T> : IDrawableArray, IDisposable where T : unmanaged
             _device = device;
             DebugName = debugName;
 
-            _vertexBuffer = new RSBuffer<T>(device, vertices, BindFlags.VertexBuffer, debugName: debugName);
-            _indexBuffer = new RSBuffer<uint>(device, indices, BindFlags.IndexBuffer, debugName: debugName);
+            _vertexBuffer = new RSBuffer<T>(device, vertices, BindFlags.VertexBuffer, debugName: debugName + "_vertexBuffer");
+            _indexBuffer = new RSBuffer<uint>(device, indices, BindFlags.IndexBuffer, debugName: debugName + "_indexBuffer");
 
             _inputLayout = _shader.InputLayout;
+            RSDebugger.VertexArrays.Add(this);
         }
 
         public void Dispose()
         {
             if (!_disposed)
             {
+                RSDebugger.VertexArrays.Remove(this);
                 _indexBuffer?.Dispose();
                 _vertexBuffer?.Dispose();
                 _inputLayout?.Dispose();

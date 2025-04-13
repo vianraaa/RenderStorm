@@ -23,6 +23,7 @@ class Program
     static void Main(string[] args)
     {
         using RSWindow win = new RSWindow();
+        List<RSTexture> textures = new List<RSTexture>();
         win.ViewBegin += () =>
         {
             testShader = new RSShader<TestVertex>(win.D3dDeviceContainer.Device, 
@@ -44,7 +45,7 @@ struct VertexOut
     float3 COLOR : COLOR;
 };
 
-VertexOut VertexProc(VertexIn input)
+VertexOut vert(VertexIn input)
 {
     VertexOut output;
     
@@ -54,7 +55,7 @@ VertexOut VertexProc(VertexIn input)
     return output;
 }
 
-float4 FragmentProc(VertexOut input) : SV_Target
+float4 frag(VertexOut input) : SV_Target
 {
     return float4(input.COLOR, 1.0f);
 }
@@ -68,6 +69,17 @@ float4 FragmentProc(VertexOut input) : SV_Target
                 [
                     0, 1, 2
             ], testShader);
+
+            for (int i = 0; i < 25; i++)
+            {
+                /*textures.Add(new RSTexture(win.D3dDeviceContainer.Device, 2, 2, [
+                    0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff,
+                ], new RSTextureCreationSettings{HasMipmaps = false}));*/
+            }
+            
             D3D11State.DepthClipEnable = true;
             D3D11State.DepthWriteEnabled = true;
             D3D11State.DepthTestEnabled = true;
@@ -77,6 +89,10 @@ float4 FragmentProc(VertexOut input) : SV_Target
         {
             testArray.Dispose();
             testShader?.Dispose();
+            foreach (var tex in textures)
+            {
+                tex.Dispose();
+            }
         };
         double spin = 0.0f;
         win.ViewUpdate += d =>

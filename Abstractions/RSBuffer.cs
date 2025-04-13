@@ -2,6 +2,7 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using RenderStorm.Display;
+using RenderStorm.Other;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
 using MapFlags = Vortice.Direct3D11.MapFlags;
@@ -15,7 +16,7 @@ public interface ITypedBuffer
     public int Size { get; }
 }
 
-public class RSBuffer<T> : ITypedBuffer, IDisposable where T : unmanaged
+public class RSBuffer<T> : IProfilerObject, ITypedBuffer, IDisposable where T : unmanaged
 {
     private bool _disposed;
     private ID3D11Buffer _buffer;
@@ -27,6 +28,7 @@ public class RSBuffer<T> : ITypedBuffer, IDisposable where T : unmanaged
         ResourceUsage usage = ResourceUsage.Default, CpuAccessFlags cpuAccessFlags = CpuAccessFlags.None, 
         string debugName = "Buffer")
     {
+        RSDebugger.Buffers.Add(this);
         _device = device;
         DebugName = debugName;
         BindFlags = bindFlags;
@@ -43,8 +45,7 @@ public class RSBuffer<T> : ITypedBuffer, IDisposable where T : unmanaged
             Usage = usage,
             CPUAccessFlags = cpuAccessFlags
         };
-
-        // Create a safe copy of the data to ensure GC doesn't move it during the operation
+        
         T[] dataCopy = data.ToArray();
         fixed (void* dataPtr = dataCopy)
         {
@@ -61,8 +62,7 @@ public class RSBuffer<T> : ITypedBuffer, IDisposable where T : unmanaged
             _buffer.DebugName = debugName;
         }
     }
-
-    public string DebugName { get; set; }
+    
     public BindFlags BindFlags { get; }
     public int ItemCount { get; private set; }
     public int Size { get; private set; }
@@ -72,6 +72,7 @@ public class RSBuffer<T> : ITypedBuffer, IDisposable where T : unmanaged
     {
         if (!_disposed)
         {
+            RSDebugger.Buffers.Remove(this);
             _buffer?.Dispose();
             _disposed = true;
         }
@@ -98,8 +99,7 @@ public class RSBuffer<T> : ITypedBuffer, IDisposable where T : unmanaged
             
         if (!BindFlags.HasFlag(BindFlags.IndexBuffer))
             throw new InvalidOperationException("Buffer was not created with IndexBuffer bind flag");
-            
-        // Verify format is appropriate for the type
+        
         if (format != Format.R16_UInt && format != Format.R32_UInt)
             throw new ArgumentException("Index buffer format must be R16_UInt or R32_UInt", nameof(format));
             

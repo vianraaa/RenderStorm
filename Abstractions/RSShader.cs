@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using RenderStorm.Display;
+using RenderStorm.Other;
 using RenderStorm.Types;
 using Vortice.D3DCompiler;
 using Vortice.Direct3D11;
@@ -15,112 +16,19 @@ using Vortice.DXGI;
 
 namespace RenderStorm.Abstractions;
 
-public class RSShader : IDisposable
+public class RSShader : IProfilerObject, IDisposable
 {
-    protected ID3D11Device _device;
+    private readonly Dictionary<string, int> _uniformLocations = new();
+    private readonly Dictionary<uint, ID3D11Buffer> _constantBuffers = new();
     protected ID3D11VertexShader _vertexShader;
     protected ID3D11PixelShader _pixelShader;
     protected ID3D11InputLayout _inputLayout;
     protected bool _disposed;
-    
-    public string DebugName { get; protected set; }
     public ID3D11InputLayout InputLayout => _inputLayout;
-
-    public RSShader(ID3D11Device device, string shaderSource, 
-        InputElementDescription[] inputLayout, string debugName = "Shader")
-    {
-        _device = device ?? throw new ArgumentNullException(nameof(device));
-        DebugName = debugName;
-
-        CompileShaders(shaderSource, inputLayout);
-    }
-
-    protected virtual void CompileShaders(string shaderSource, 
-        InputElementDescription[] inputLayout)
-    {
-        byte[] vertexShaderBytecode = CompileShader(shaderSource, DxcShaderStage.Vertex, "VertexProc");
-        byte[] pixelShaderBytecode = CompileShader(shaderSource, DxcShaderStage.Pixel, "FragmentProc");
-
-        _vertexShader = _device.CreateVertexShader(vertexShaderBytecode);
-        _pixelShader = _device.CreatePixelShader(pixelShaderBytecode);
-
-        if (inputLayout != null && inputLayout.Length > 0)
-        {
-            _inputLayout = _device.CreateInputLayout(inputLayout, vertexShaderBytecode);
-        }
-    }
-
-    protected byte[] CompileShader(string source, DxcShaderStage type, string entryPoint = "Main")
-    {
-        string profile = type == DxcShaderStage.Vertex ? "vs_5_0" : "ps_5_0";
-
-        ShaderFlags flags = ShaderFlags.EnableStrictness;
-        flags |= ShaderFlags.OptimizationLevel3;
-        
-        var result = Compiler.Compile(source, entryPoint , "RenderstormShaderSource", profile);
-        byte[] buffer = new byte[result.Length];
-        result.CopyTo(buffer);
-        return buffer;
-    }
-
-    public virtual void Use(D3D11DeviceContainer container)
-    {
-        var context = container.Context;
-        if (_disposed)
-            throw new ObjectDisposedException(nameof(RSShader));
-        
-        context.VSSetShader(_vertexShader);
-        context.PSSetShader(_pixelShader);
-            
-        if (_inputLayout != null)
-            context.IASetInputLayout(_inputLayout);
-    }
-
-    public virtual void Dispose()
-    {
-        if (!_disposed)
-        {
-            _vertexShader?.Dispose();
-            _pixelShader?.Dispose();
-            _inputLayout?.Dispose();
-            _disposed = true;
-        }
-    }
-}
-
-public class RSShader<T> : RSShader where T : unmanaged
-{
-    private static readonly Dictionary<string, RSShader<T>> _shaderCache = new();
-    private readonly Dictionary<string, int> _uniformLocations = new();
-    private readonly Dictionary<uint, ID3D11Buffer> _constantBuffers = new();
     
-    public RSShader(ID3D11Device device, string shaderSource, 
-        string debugName = "Shader") : base(device, shaderSource, null, debugName)
+    private void CreateInputLayoutFromType(ID3D11Device dev, byte[] shaderBytecode, Type type)
     {
-        // Cache this shader instance if caching is desired
-        string cacheKey = ComputeShaderHash(shaderSource);
-        if (!_shaderCache.ContainsKey(cacheKey))
-        {
-            _shaderCache[cacheKey] = this;
-        }
-    }
-
-    protected override void CompileShaders(string shaderSource, 
-        InputElementDescription[] unusedInputLayout)
-    {
-        byte[] vertexShaderBytecode = CompileShader(shaderSource, DxcShaderStage.Vertex, "VertexProc");
-        byte[] pixelShaderBytecode = CompileShader(shaderSource, DxcShaderStage.Pixel, "FragmentProc");
-
-        _vertexShader = _device.CreateVertexShader(vertexShaderBytecode);
-        _pixelShader = _device.CreatePixelShader(pixelShaderBytecode);
-
-        // Create input layout based on the vertex type T
-        CreateInputLayoutFromType(vertexShaderBytecode);
-    }
-
-    private void CreateInputLayoutFromType(byte[] shaderBytecode)
-    {
-        var fields = typeof(T).GetFields(BindingFlags.Public | BindingFlags.Instance);
+        var fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance);
         var layoutElements = new List<InputElementDescription>();
         uint offset = 0;
 
@@ -128,8 +36,7 @@ public class RSShader<T> : RSShader where T : unmanaged
         {
             Format format;
             uint size;
-
-            // Get semantic name from attribute if available, otherwise use field name
+            
             string semanticName = field.Name;
             var semanticAttrs = field.GetCustomAttributes(typeof(SemanticNameAttribute), false);
             if (semanticAttrs.Length > 0)
@@ -173,16 +80,92 @@ public class RSShader<T> : RSShader where T : unmanaged
         
         if (layoutElements.Count > 0)
         {
-            _inputLayout = _device.CreateInputLayout(layoutElements.ToArray(), shaderBytecode);
+            _inputLayout = dev.CreateInputLayout(layoutElements.ToArray(), shaderBytecode);
+        }
+    }
+    
+    private static string ComputeShaderHash(string shaderSource)
+    {
+        using (SHA1 sha1 = SHA1.Create())
+        {
+            byte[] bytes = sha1.ComputeHash(Encoding.UTF8.GetBytes(shaderSource));
+            StringBuilder builder = new StringBuilder();
+            foreach (byte b in bytes)
+                builder.Append(b.ToString("x2"));
+            return builder.ToString();
         }
     }
 
-    public unsafe void SetUniform<TUniform>(D3D11DeviceContainer container, uint slot, TUniform value) 
-        where TUniform : unmanaged
+    public RSShader(ID3D11Device device, string shaderSource, 
+        Type vertex, string debugName = "Shader")
+    {
+        DebugName = debugName;
+        
+        string cachePath = Path.Combine(RSWindow.Instance.CachePath, ComputeShaderHash(shaderSource));
+        string fragCache = cachePath + ".fsh";
+        string vertexCache = cachePath + ".vsh";
+        if (File.Exists(fragCache) && File.Exists(vertexCache))
+        {
+            var pixelBytes = File.ReadAllBytes(fragCache);
+            var vertexBytes = File.ReadAllBytes(vertexCache);
+            _vertexShader = device.CreateVertexShader(vertexBytes);
+            _pixelShader = device.CreatePixelShader(pixelBytes);
+            CreateInputLayoutFromType(device, vertexBytes, vertex);
+            RSDebugger.Shaders.Add(this);
+            return;
+        }
+
+        CompileShaders(device, shaderSource, vertex);
+        RSDebugger.Shaders.Add(this);
+    }
+    
+    public RSShader(ID3D11Device device, byte[] vertexBytes, byte[] pixelBytes,
+        Type vertex, string debugName = "Shader")
+    {
+        DebugName = debugName;
+
+        _vertexShader = device.CreateVertexShader(vertexBytes);
+        _pixelShader = device.CreatePixelShader(pixelBytes);
+
+        CreateInputLayoutFromType(device, vertexBytes, vertex);
+        RSDebugger.Shaders.Add(this);
+    }
+
+    protected void CompileShaders(ID3D11Device dev, string shaderSource, Type vertex)
+    {
+        byte[] vertexShaderBytecode = CompileShader(shaderSource, DxcShaderStage.Vertex, "vert");
+        byte[] pixelShaderBytecode = CompileShader(shaderSource, DxcShaderStage.Pixel, "frag");
+        
+        string cachePath = Path.Combine(RSWindow.Instance.CachePath, ComputeShaderHash(shaderSource));
+        string fragCache = cachePath + ".fsh";
+        string vertexCache = cachePath + ".vsh";
+        
+        File.WriteAllBytes(fragCache, pixelShaderBytecode);
+        File.WriteAllBytes(vertexCache, vertexShaderBytecode);
+
+        _vertexShader = dev.CreateVertexShader(vertexShaderBytecode);
+        _pixelShader = dev.CreatePixelShader(pixelShaderBytecode);
+        CreateInputLayoutFromType(dev, vertexShaderBytecode, vertex);
+    }
+
+    private byte[] CompileShader(string source, DxcShaderStage type, string entryPoint = "Main")
+    {
+        string profile = type == DxcShaderStage.Vertex ? "vs_5_0" : "ps_5_0";
+
+        ShaderFlags flags = ShaderFlags.EnableStrictness;
+        flags |= ShaderFlags.OptimizationLevel3;
+        
+        var result = Compiler.Compile(source, entryPoint , "RenderstormShaderSource", profile);
+        byte[] buffer = new byte[result.Length];
+        result.CopyTo(buffer);
+        return buffer;
+    }
+
+    public unsafe void SetUniform<TUniform>(D3D11DeviceContainer container, uint slot, TUniform value)
     {
         var context = container.Context;
         if (_disposed)
-            throw new ObjectDisposedException(nameof(RSShader<T>));
+            throw new ObjectDisposedException(nameof(RSShader));
         
         if (!_constantBuffers.TryGetValue(slot, out var buffer))
         {
@@ -194,12 +177,11 @@ public class RSShader<T> : RSShader where T : unmanaged
                 CPUAccessFlags = CpuAccessFlags.Write
             };
             
-            buffer = _device.CreateBuffer(bufferDesc);
+            buffer = container.Device.CreateBuffer(bufferDesc);
             buffer.DebugName = $"{DebugName}_CB_Register{slot}";
             _constantBuffers[slot] = buffer;
         }
-
-        // update the buffer with new data
+        
         var mappedResource = context.Map(buffer, 0, MapMode.WriteDiscard);
         try
         {
@@ -214,7 +196,14 @@ public class RSShader<T> : RSShader where T : unmanaged
         context.PSSetConstantBuffers(slot, new[] { buffer });
     }
 
-    public override void Dispose()
+    public void Use(D3D11DeviceContainer context)
+    {
+        context.Context.IASetInputLayout(_inputLayout);
+        context.Context.VSSetShader(_vertexShader);
+        context.Context.PSSetShader(_pixelShader);
+    }
+
+    public void Dispose()
     {
         if (!_disposed)
         {
@@ -223,25 +212,22 @@ public class RSShader<T> : RSShader where T : unmanaged
                 buffer.Dispose();
             }
             _constantBuffers.Clear();
-            
-            base.Dispose();
-        }
-    }
-
-    private static string ComputeShaderHash(string shaderSource)
-    {
-        using (SHA1 sha1 = SHA1.Create())
-        {
-            byte[] bytes = sha1.ComputeHash(Encoding.UTF8.GetBytes(shaderSource));
-            StringBuilder builder = new StringBuilder();
-            foreach (byte b in bytes)
-                builder.Append(b.ToString("x2"));
-            return builder.ToString();
+            _vertexShader.Dispose();
+            _pixelShader.Dispose();
+            _inputLayout.Dispose();
         }
     }
 }
 
-// Optional attribute to specify HLSL semantic names that differ from field names
+public class RSShader<T> : RSShader where T : unmanaged
+{
+    public RSShader(ID3D11Device device, string shaderSource,
+        string debugName = "Shader") : base(device, shaderSource, typeof(T), debugName) { }
+    
+    public RSShader(ID3D11Device device, byte[] vertexBytes, byte[] pixelBytes,
+        string debugName = "Shader") : base(device, vertexBytes, pixelBytes, typeof(T), debugName) { }
+}
+
 [AttributeUsage(AttributeTargets.Field)]
 public class SemanticNameAttribute : Attribute
 {

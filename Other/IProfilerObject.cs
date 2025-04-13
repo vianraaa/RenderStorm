@@ -2,6 +2,12 @@
 
 public class IProfilerObject
 {
-    internal uint NativeInstance = 0;
-    public string DebugName { get; protected set; } = "Shader";
+    public IProfilerObject()
+    {
+        NativeInstance = NativeInstCount;
+        NativeInstCount++;
+    }
+    internal static int NativeInstCount = 0;
+    internal int NativeInstance = 0;
+    public string DebugName { get; protected set; } = "ProfilerObject";
 }
