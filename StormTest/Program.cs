@@ -72,12 +72,13 @@ float4 frag(VertexOut input) : SV_Target
 
             for (int i = 0; i < 25; i++)
             {
-                /*textures.Add(new RSTexture(win.D3dDeviceContainer.Device, 2, 2, [
-                    0xff, 0xff, 0xff, 0xff,
-                    0xff, 0xff, 0xff, 0xff,
-                    0xff, 0xff, 0xff, 0xff,
-                    0xff, 0xff, 0xff, 0xff,
-                ], new RSTextureCreationSettings{HasMipmaps = false}));*/
+                textures.Add(new RSTexture(win.D3dDeviceContainer.Device, 2, 2, [
+                    0xff, 0x00, 0x00, 0xff, 0x00, 0x00, 0xff, 0xff,
+                    0x00, 0x00, 0xff, 0xff, 0xff, 0x00, 0x00, 0xff,
+                ], new TextureCreationSettings{Filtering = TextureFiltering.Nearest, 
+                    AddressMode = TextureAddressMode.Clamp, IsDynamic = false,
+                    HasMipmaps = false
+                }));
             }
             
             D3D11State.DepthClipEnable = true;

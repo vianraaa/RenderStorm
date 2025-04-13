@@ -193,19 +193,17 @@ public static class RSDebugger
                     if (index >= Textures.Count)
                         break;
                     var texture = (RSTexture)Textures[index];
-                    ImGui.Image((IntPtr)texture.NativeInstance, new Vector2(size, size));
+                    ImGui.Image(texture.ShaderResourceView.NativePointer, new Vector2(size, size));
                     ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(0, 2));
                     if (ImGui.BeginItemTooltip())
                     {
                         ImGui.SeparatorText(texture.DebugName);
-                        ImGui.Image((IntPtr)texture.NativeInstance, new(256, 256));
+                        ImGui.Image(texture.ShaderResourceView.NativePointer, new(256, 256));
                         ImGui.Text($"{texture.Width}x{texture.Height}   ");
-                        ImGui.SameLine();
-                        ImGui.Text($"Tiled: {texture.CreationSettings.IsTiled}   ");
-                        ImGui.SameLine();
-                        ImGui.Text($"Mipmaps: {texture.CreationSettings.HasMipmaps}");
-                        ImGui.Text($"Filter Mode: \"{Enum.GetName(texture.CreationSettings.Filtering)}\"");
-                        ImGui.Text($"Pixel Format: \"{Enum.GetName(texture.CreationSettings.Format)}\"");
+                        ImGui.Text($"Mipmaps: {texture.Settings.HasMipmaps}");
+                        ImGui.Text($"AddressMode: \"{Enum.GetName(texture.Settings.AddressMode)}\"");
+                        ImGui.Text($"Filter Mode: \"{Enum.GetName(texture.Settings.Filtering)}\"");
+                        ImGui.Text($"Pixel Format: \"{Enum.GetName(texture.Settings.Format)}\"");
                         ImGui.EndTooltip();
                     }
 
