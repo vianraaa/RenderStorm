@@ -50,7 +50,6 @@ public class RSVertexArray<T> :  IProfilerObject, IDrawableArray, IDisposable wh
             _vertexBuffer?.BindAsVertexBuffer(context);
             _indexBuffer?.BindAsIndexBuffer(context);
         }
-
         public void DrawIndexed(D3D11DeviceContainer container)
         {
             var context = container.Context;
