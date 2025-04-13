@@ -5,14 +5,12 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    </PropertyGroup>
-
-    <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
-      <Optimize>true</Optimize>
+        <SelfContained>false</SelfContained>
+        <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+        <Optimize>true</Optimize>
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="ImGui.NET" Version="1.91.6.1"/>
         <PackageReference Include="ppy.SDL2-CS" Version="1.0.741-alpha" />
         <PackageReference Include="Vortice.D3DCompiler" Version="3.7.4-beta" />
         <PackageReference Include="Vortice.Direct3D11" Version="3.6.2" />
@@ -21,15 +19,31 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Compile Remove="HighLevel\**" />
       <Compile Remove="Other\**" />
       <Compile Remove="StormTest\**" />
+      <Compile Remove="HighLevel\**" />
     </ItemGroup>
 
     <ItemGroup>
-      <None Remove="HighLevel\**" />
       <None Remove="Other\**" />
       <None Remove="StormTest\**" />
+      <None Remove="HighLevel\**" />
+      <None Update="cimgui.dll">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+      <None Update="dxcompiler.dll">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+      <None Update="dxil.dll">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+      <None Update="SDL2.dll">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+    </ItemGroup>
+
+    <ItemGroup>
+      <EmbeddedResource Remove="HighLevel\**" />
     </ItemGroup>
 
 </Project>

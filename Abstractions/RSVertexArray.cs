@@ -1,6 +1,7 @@
 using System;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using RenderStorm.Display;
 using RenderStorm.Types;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
@@ -15,23 +16,19 @@ public class RSVertexArray<T> : IDrawableArray, IDisposable where T : unmanaged
         private readonly RSBuffer<T>? _vertexBuffer;
         private ID3D11InputLayout? _inputLayout;
         private readonly ID3D11Device _device;
-        private RSShader _shader;
+        private RSShader<T> _shader;
         public string DebugName { get; }
 
-        public RSVertexArray(ID3D11Device device, ReadOnlySpan<T> vertices, ReadOnlySpan<uint> indices, RSShader shader, string debugName = "VertexArray")
+        public RSVertexArray(ID3D11Device device, ReadOnlySpan<T> vertices, ReadOnlySpan<uint> indices, RSShader<T> shader,
+            string debugName = "VertexArray")
         {
             _shader = shader;
             _device = device;
             DebugName = debugName;
-            
-            _vertexBuffer = new RSBuffer<T>(device, vertices, BindFlags.VertexBuffer, debugName);
-            _indexBuffer = new RSBuffer<uint>(device, indices, BindFlags.IndexBuffer, debugName);
-            
-            CreateInputLayout();
-        }
 
-        private void CreateInputLayout()
-        {
+            _vertexBuffer = new RSBuffer<T>(device, vertices, BindFlags.VertexBuffer, debugName: debugName);
+            _indexBuffer = new RSBuffer<uint>(device, indices, BindFlags.IndexBuffer, debugName: debugName);
+
             _inputLayout = _shader.InputLayout;
         }
 
@@ -46,25 +43,18 @@ public class RSVertexArray<T> : IDrawableArray, IDisposable where T : unmanaged
             }
         }
 
-        public void Bind(ID3D11DeviceContext context)
+        public void Bind(D3D11DeviceContainer context)
         {
-            _shader.Use();
-            context.IASetInputLayout(_inputLayout);
-            _vertexBuffer?.Bind(context);
-            _indexBuffer?.Bind(context);
+            _shader.Use(context);
+            _vertexBuffer?.BindAsVertexBuffer(context);
+            _indexBuffer?.BindAsIndexBuffer(context);
         }
 
-        public void Unbind(ID3D11DeviceContext context)
+        public void DrawIndexed(D3D11DeviceContainer container)
         {
-            _vertexBuffer?.Unbind(context);
-            _indexBuffer?.Unbind(context);
-        }
-
-        public void DrawIndexed(ID3D11DeviceContext context)
-        {
-            Bind(context);
+            var context = container.Context;
+            Bind(container);
             context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
             context.DrawIndexed((uint)_indexBuffer.ItemCount, 0, 0);
-            Unbind(context);
         }
     }

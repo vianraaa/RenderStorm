@@ -6,23 +6,28 @@ namespace RenderStorm;
 public static class D3D11State
 {
     public static bool DepthTestEnabled { get; set; } = true;
+    public static bool DepthClipEnable { get; set; } = true;
+    public static bool MultiSampleEnable { get; set; } = false;
+    public static bool AntialiasedLineEnable { get; set; } = false;
     public static bool CullFaceEnabled { get; set; } = true;
     public static bool InvertCulling { get; set; } = false;
     public static bool AlphaBlendingEnabled { get; set; } = true;
     public static bool DepthWriteEnabled { get; set; } = true;
+    public static uint Samples { get; set; } = 1;
 
-    
+
     public static RasterizerDescription RasterizerDesc => new()
     {
         FillMode = FillMode.Solid,
         CullMode = CullFaceEnabled ? CullMode.Back : CullMode.None,
         FrontCounterClockwise = InvertCulling,
-        DepthClipEnable = true,
-        MultisampleEnable = false,
-        AntialiasedLineEnable = false,
+        DepthClipEnable = DepthClipEnable,
+        MultisampleEnable = MultiSampleEnable,
+        AntialiasedLineEnable = AntialiasedLineEnable,
         DepthBiasClamp = 0.0f,
         DepthBias = 0,
         SlopeScaledDepthBias = 0.0f,
+        ScissorEnable = false,
     };
     public static DepthStencilDescription DepthStencilDesc => new()
     {
@@ -65,24 +70,11 @@ public static class D3D11State
     public static void ApplyStateToContext(ID3D11DeviceContext context, 
         ID3D11RasterizerState rasterizerState, ID3D11DepthStencilState depthStencilState, ID3D11BlendState blendState)
     {
-        // Set the rasterizer state
         context.RSSetState(rasterizerState);
-
-        // Set the depth stencil state
         context.OMSetDepthStencilState(depthStencilState, 1);
-
-        // Set the blend state
         unsafe
         {
             context.OMSetBlendState(blendState, null, 0xFFFFFFFF);
         }
-    }
-    public static void ApplyDefaultStates(ID3D11DeviceContext context, ID3D11Device device)
-    {
-        var rasterizerState = CreateRasterizerState(device);
-        var depthStencilState = CreateDepthStencilState(device);
-        var blendState = CreateBlendState(device);
-
-        ApplyStateToContext(context, rasterizerState, depthStencilState, blendState);
     }
 }

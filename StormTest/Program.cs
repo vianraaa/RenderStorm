@@ -1,4 +1,6 @@
-﻿using RenderStorm.Abstractions;
+﻿using System.Numerics;
+using RenderStorm;
+using RenderStorm.Abstractions;
 using RenderStorm.Display;
 using RenderStorm.Types;
 
@@ -6,8 +8,13 @@ namespace StormTest;
 
 struct TestVertex
 {
-    public Vec3 POSITION;
-    public Vec3 COLOR;
+    public Vector3 POSITION;
+    public Vector3 COLOR;
+}
+
+struct MatrixBufferData
+{
+    public Matrix4x4 WorldViewProjection;
 }
 class Program
 {
@@ -19,8 +26,12 @@ class Program
         win.ViewBegin += () =>
         {
             testShader = new RSShader<TestVertex>(win.D3dDeviceContainer.Device, 
-                win.D3dDeviceContainer.Context, 
                 @"
+cbuffer MatrixBuffer : register(b0)
+{
+    row_major float4x4 worldViewProjection;
+}
+
 struct VertexIn
 {
     float3 POSITION : POSITION;
@@ -32,46 +43,54 @@ struct VertexOut
     float4 POSITION : SV_POSITION;
     float3 COLOR : COLOR;
 };
-VertexOut Main(VertexIn input)
+
+VertexOut VertexProc(VertexIn input)
 {
     VertexOut output;
     
-    output.POSITION = float4(input.POSITION, 1.0f);
+    output.POSITION = mul(float4(input.POSITION, 1.0f), worldViewProjection);
     output.COLOR = input.COLOR;
     
     return output;
 }
-", 
-                @"
-struct VertexOut
-{
-    float4 POSITION : SV_POSITION;
-    float3 COLOR : COLOR;
-};
 
-float4 Main(VertexOut input) : SV_Target
+float4 FragmentProc(VertexOut input) : SV_Target
 {
     return float4(input.COLOR, 1.0f);
 }
 ");
             testArray = new RSVertexArray<TestVertex>(win.D3dDeviceContainer.Device, 
                 [
-                    new TestVertex{POSITION = new Vec3(-1, -1, 0), COLOR = new Vec3(1, 0, 0)},
-                    new TestVertex{POSITION = new Vec3(0, 1, 0), COLOR = new Vec3(0, 1, 0)},
-                    new TestVertex{POSITION = new Vec3(1, -1, 0), COLOR = new Vec3(0, 0, 1)}
+                    new TestVertex{POSITION = new Vector3(-1, -1, 0), COLOR = new Vector3(1, 0, 0)},
+                    new TestVertex{POSITION = new Vector3(0, 1, 0), COLOR = new Vector3(0, 1, 0)},
+                    new TestVertex{POSITION = new Vector3(1, -1, 0), COLOR = new Vector3(0, 0, 1)}
             ], 
                 [
                     0, 1, 2
             ], testShader);
+            D3D11State.DepthClipEnable = true;
+            D3D11State.DepthWriteEnabled = true;
+            D3D11State.DepthTestEnabled = true;
+            D3D11State.CullFaceEnabled = false;
         };
         win.ViewEnd += () =>
         {
             testArray.Dispose();
             testShader?.Dispose();
         };
+        double spin = 0.0f;
         win.ViewUpdate += d =>
         {
-            testArray.DrawIndexed(win.D3dDeviceContainer.Context);
+            spin += d;
+            Matrix4x4 drawMatrix = Matrix4x4.CreateRotationY((float)spin) * 
+                                   Matrix4x4.CreateTranslation(new Vector3(0, 0, -3)) * 
+                                   Matrix4x4.CreatePerspectiveFieldOfView(1.5f, win.GetAspect(), 0.1f, 1024.0f);
+            MatrixBufferData data = new MatrixBufferData
+            {
+                WorldViewProjection = drawMatrix
+            };
+            testShader.SetUniform(win.D3dDeviceContainer, 0, data);
+            testArray.DrawIndexed(win.D3dDeviceContainer);
         };
         win.Run();
     }

@@ -1,4 +1,6 @@
 ﻿using System.Numerics;
+using ImGuiNET;
+using RenderStorm.ImGuiImpl;
 using SDL2;
 
 namespace RenderStorm.Display
@@ -55,6 +57,18 @@ namespace RenderStorm.Display
             SDL.SDL_SysWMinfo info = new SDL.SDL_SysWMinfo();
             SDL.SDL_GetWindowWMInfo(Native, ref info);
             D3dDeviceContainer = new D3D11DeviceContainer(info.info.win.window, (uint)width, (uint)height);
+            IntPtr ctx = ImGui.CreateContext();
+            ImGui.SetCurrentContext(ctx);
+            ImGui.StyleColorsDark();
+            
+            var io = ImGui.GetIO();
+            io.Fonts.AddFontDefault();
+            
+            ImGuiSdl2Impl.ImGui_ImplSDL2_InitForD3D(ImGuiSdl2Impl.GetSDLWindow());
+            ImGuiDx11Impl.ImGui_ImplDX11_Init(D3dDeviceContainer.Device.NativePointer, D3dDeviceContainer.Context.NativePointer);
+            io = ImGui.GetIO();
+            io.DisplaySize.X = width;
+            io.DisplaySize.Y = height;
         }
 
         public Vector2 GetSize()
@@ -81,42 +95,64 @@ namespace RenderStorm.Display
 
         public void Run()
         {
-            double dt = 1.0f / 60.0f;
-            ViewBegin?.Invoke();
-            while (Running)
+            try
             {
-                // Poll events
-                SDL.SDL_Event e;
-                while (SDL.SDL_PollEvent(out e) != 0)
-                {
-                    // Handle events
-                    switch (e.type)
-                    {
-                        case SDL.SDL_EventType.SDL_QUIT:
-                            Running = false;
-                            break;
-                    }
-                }
-                
                 double lastFrameTime = SDL.SDL_GetTicks() / 1000.0;
-                double deltaTime = lastFrameTime - dt;
-                dt = lastFrameTime;
+                ViewBegin?.Invoke();
+                D3dDeviceContainer.InitializeRenderStates();
+                while (Running)
+                {
+                    SDL.SDL_Event e;
+                    while (SDL.SDL_PollEvent(out e) != 0)
+                    {
+                        unsafe
+                        {
+                            ImGuiSdl2Impl.ImGui_ImplSDL2_ProcessEvent(&e);
+                        }
+                        switch (e.type)
+                        {
+                            case SDL.SDL_EventType.SDL_QUIT:
+                                Running = false;
+                                break;
+                        }
+                    }
                 
-                D3dDeviceContainer.Clear(0.1f, 0.1f, 0.1f, 1.0f); // Clear to black
-                D3dDeviceContainer.SetRenderTargets();
-                D3dDeviceContainer.ApplyDefaultStates();
+                    ImGuiDx11Impl.ImGui_ImplDX11_NewFrame();
+                    ImGuiSdl2Impl.ImGui_ImplSDL2_NewFrame();
+                    ImGui.NewFrame();
                 
-                ViewUpdate?.Invoke(deltaTime);
+                    double currentTime = SDL.SDL_GetTicks() / 1000.0;
+                    double deltaTime = currentTime - lastFrameTime;
+                    lastFrameTime = currentTime;
+                    D3dDeviceContainer.ApplyRenderStates();
+                    D3dDeviceContainer.SetRenderTargets();
+                    D3dDeviceContainer.Clear(0.1f, 0.1f, 0.1f, 1.0f);
+                    ViewUpdate?.Invoke(deltaTime);
                 
-                D3dDeviceContainer.Present();
+                    ImGui.ShowDemoWindow();
                 
-                SDL.SDL_GL_SwapWindow(Native);
+                    ImGui.Render();
+                    unsafe
+                    {
+                        ImGuiDx11Impl.ImGui_ImplDX11_RenderDrawData(ImGui.GetDrawData().NativePtr);
+                    }
+                    D3dDeviceContainer.Present();
+                }
+    
+                ViewEnd?.Invoke();
             }
-            ViewEnd?.Invoke();
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                throw;
+            }
         }
 
         public void Dispose()
         {
+            ImGuiSdl2Impl.ImGui_ImplSDL2_Shutdown();
+            ImGuiDx11Impl.ImGui_ImplDX11_Shutdown();
+            ImGui.DestroyContext();
             D3dDeviceContainer.Dispose();
             SDL.SDL_DestroyWindow(Native);
             SDL.SDL_Quit();

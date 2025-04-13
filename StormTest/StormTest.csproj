@@ -7,6 +7,10 @@
         <Nullable>enable</Nullable>
     </PropertyGroup>
 
+    <Target Name="RemoveRuntimesFolder" AfterTargets="Build">
+        <RemoveDir Directories="$(OutputPath)runtimes" />
+    </Target>
+
     <ItemGroup>
       <ProjectReference Include="..\RenderStorm.csproj" />
     </ItemGroup>

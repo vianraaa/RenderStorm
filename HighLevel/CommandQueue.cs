@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.Numerics;
 using RenderStorm.Abstractions;
 using RenderStorm.Display;
-using RenderStorm.Other;
 
 namespace RenderStorm.HighLevel;
 
@@ -149,20 +148,9 @@ public interface ICommandQueueItem: IDisposable
     public void Dispatch(Matrix4x4 matrix, RSShader? shader);
 }
 
-public struct DrawContext
-{
-    public bool DepthTesting = true;
-    public bool CullFace = true;
-
-    public DrawContext()
-    {
-    }
-}
-
 public class CommandQueue: IDisposable
 {
     public readonly string DebugName = "Queue";
-    public DrawContext DrawContext = new();
     public RSShader? DrawShader;
     public Queue<ICommandQueueItem> RenderQueue = new();
     public int DrawnItems = 0;
@@ -177,25 +165,23 @@ public class CommandQueue: IDisposable
     {
         DrawShader = rsshader;
         DebugName = debugName;
-        RSDebugger.Queues.Add(this);
-        RSDebugger.QueueNames.Add(DebugName);
     }
     /// <summary>
     /// Preprocesses and dispatches all attached command items.
     /// </summary>
     /// <param name="cam">The camera used for rendering data.</param>
     /// <param name="arguments">Arguments that control how preprocessing is done.</param>
-    public void Dispatch(Camera cam, DispatchArguments arguments = DispatchArguments.Default)
+    public void Dispatch(Camera cam, D3D11DeviceContainer container, DispatchArguments arguments = DispatchArguments.Default)
     {
         Matrix4x4 view = cam.GetView();
         Matrix4x4 proj = cam.GetProjection(RSWindow.Instance.GetAspect());
         if ((arguments & DispatchArguments.SwitchViewProjection) != 0)
         {
-            Dispatch(view * proj, arguments);
+            Dispatch(view * proj, container, arguments);
         }
         else
         {
-            Dispatch(view * proj, arguments);
+            Dispatch(view * proj, container, arguments);
         }
 
     }
@@ -222,15 +208,12 @@ public class CommandQueue: IDisposable
     }
 
 
-    public void Dispatch(Matrix4x4 matrix, DispatchArguments arguments = DispatchArguments.Default)
+    public void Dispatch(Matrix4x4 matrix, D3D11DeviceContainer container, DispatchArguments arguments = DispatchArguments.Default)
     {
         totalStopwatch.Restart();
         CommandQueueTimes.Clear();
-
-        // apply renders state only once
-        OpenGL.DepthTest = DrawContext.DepthTesting;
-        OpenGL.CullFace = DrawContext.CullFace;
-        DrawShader?.Use();
+        
+        DrawShader?.Use(container);
         DrawShader?.SetUniform("m_ViewProj", matrix);
         var countCopy = RenderQueue.Count;
         for (int i = 0; i < countCopy; i++)

@@ -18,6 +18,7 @@ public class D3D11DeviceContainer: IDisposable
     private ID3D11BlendState _blendState;
     
     private IntPtr _windowHandle;
+    private Viewport _viewport;
     
     public ID3D11Device Device => _device;
     public ID3D11DeviceContext Context => _context;
@@ -25,24 +26,11 @@ public class D3D11DeviceContainer: IDisposable
     {
         _windowHandle = windowHandle;
         
-        InitializeDeviceAndContext();
-        InitializeSwapChain(width, height);
+        InitializeDeviceAndContext(width, height);
         InitializeRenderTargetAndDepthStencil(width, height);
-        InitializeRenderStates();
+        _viewport = new Viewport(0, 0, width, height);
     }
-    private void InitializeDeviceAndContext()
-    {
-
-        var creationFlags = DeviceCreationFlags.BgraSupport | DeviceCreationFlags.Debug;
-
-        _device = D3D11.D3D11CreateDevice(
-            DriverType.Hardware,
-            creationFlags,
-            FeatureLevel.Level_11_0
-        );
-        _context = _device.ImmediateContext;
-    }
-    private void InitializeSwapChain(uint width, uint height)
+    private void InitializeDeviceAndContext(uint width, uint height)
     {
         var swapChainDesc = new SwapChainDescription
         {
@@ -52,19 +40,30 @@ public class D3D11DeviceContainer: IDisposable
                 Width = width,
                 Height = height,
                 Format = Format.R8G8B8A8_UNorm,
-                Scaling = ModeScaling.Unspecified,
-                ScanlineOrdering = ModeScanlineOrder.Unspecified,
-                RefreshRate = new Rational(60, 1),
+                RefreshRate = new Rational(60, 1)
             },
             BufferUsage = Usage.RenderTargetOutput,
             OutputWindow = _windowHandle,
             SampleDescription = new SampleDescription(1, 0),
             Windowed = true,
-            Flags = SwapChainFlags.None,
+            SwapEffect = SwapEffect.Discard,
+            Flags = SwapChainFlags.None
         };
 
-        var dxgiFactory = DXGI.CreateDXGIFactory1<IDXGIFactory1>();
-        _swapChain = dxgiFactory.CreateSwapChain(_device, swapChainDesc);
+        var creationFlags = DeviceCreationFlags.BgraSupport | DeviceCreationFlags.Debug;
+        
+        FeatureLevel? lvl;
+        D3D11.D3D11CreateDeviceAndSwapChain(
+            null,
+            DriverType.Hardware,
+            creationFlags,
+            new[] { FeatureLevel.Level_11_0 },
+            swapChainDesc,
+            out _swapChain,
+            out _device,
+            out lvl,
+            out _context
+        );
     }
     private void InitializeRenderTargetAndDepthStencil(uint width, uint height)
     {
@@ -87,14 +86,20 @@ public class D3D11DeviceContainer: IDisposable
 
         _depthStencilView = _device.CreateDepthStencilView(depthStencilTexture);
     }
-    private void InitializeRenderStates()
+    public void InitializeRenderStates()
     {
         _rasterizerState = D3D11State.CreateRasterizerState(_device);
         _depthStencilState = D3D11State.CreateDepthStencilState(_device);
         _blendState = D3D11State.CreateBlendState(_device);
     }
+
+    public void ApplyRenderStates()
+    {
+        D3D11State.ApplyStateToContext(Context, _rasterizerState, _depthStencilState, _blendState);
+    }
     public void SetRenderTargets()
     {
+        _context.RSSetViewport(_viewport);
         _context.OMSetRenderTargets(_renderTargetView, _depthStencilView);
     }
     public void Clear(float r, float g, float b, float a)
@@ -105,10 +110,6 @@ public class D3D11DeviceContainer: IDisposable
     public void Present()
     {
         _swapChain.Present(1, PresentFlags.None);
-    }
-    public void ApplyDefaultStates()
-    {
-        D3D11State.ApplyDefaultStates(_context, _device);
     }
 
     public void Dispose()
