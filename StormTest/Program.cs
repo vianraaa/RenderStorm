@@ -80,7 +80,6 @@ float4 frag(VertexOut input) : SV_Target
                     HasMipmaps = false
                 }));
             }
-            
             D3D11State.DepthClipEnable = true;
             D3D11State.DepthWriteEnabled = true;
             D3D11State.DepthTestEnabled = true;
@@ -96,16 +95,15 @@ float4 frag(VertexOut input) : SV_Target
             }
         };
         double spin = 0.0f;
+        MatrixBufferData data = new MatrixBufferData();
+        Matrix4x4 projView = Matrix4x4.CreateTranslation(new Vector3(0, 0, -3)) * 
+                             Matrix4x4.CreatePerspectiveFieldOfView(1.5f, win.GetAspect(), 0.1f, 1024.0f);
         win.ViewUpdate += d =>
         {
             spin += d;
-            Matrix4x4 drawMatrix = Matrix4x4.CreateRotationY((float)spin) * 
-                                   Matrix4x4.CreateTranslation(new Vector3(0, 0, -3)) * 
-                                   Matrix4x4.CreatePerspectiveFieldOfView(1.5f, win.GetAspect(), 0.1f, 1024.0f);
-            MatrixBufferData data = new MatrixBufferData
-            {
-                WorldViewProjection = drawMatrix
-            };
+            Matrix4x4 drawMatrix = Matrix4x4.CreateRotationY((float)spin) * projView;
+                                   
+            data.WorldViewProjection = drawMatrix;
             testShader.SetUniform(win.D3dDeviceContainer, 0, data);
             testArray.DrawIndexed(win.D3dDeviceContainer);
         };

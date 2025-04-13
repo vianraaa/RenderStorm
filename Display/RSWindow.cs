@@ -133,7 +133,7 @@ namespace RenderStorm.Display
                 lastFrameTime = currentTime;
                 D3dDeviceContainer.ApplyRenderStates();
                 D3dDeviceContainer.SetRenderTargets();
-                D3dDeviceContainer.Clear(0.1f, 0.1f, 0.1f, 1.0f);
+                D3dDeviceContainer.Clear(0f, 0f, 0f, 1.0f);
                 ViewUpdate?.Invoke(deltaTime);
                 RSDebugger.DeltaTime = deltaTime;
                 RSDebugger.TimeElapsed += deltaTime;
