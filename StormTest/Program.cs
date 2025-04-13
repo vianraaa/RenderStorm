@@ -2,6 +2,7 @@
 using RenderStorm;
 using RenderStorm.Abstractions;
 using RenderStorm.Display;
+using RenderStorm.HighLevel;
 using RenderStorm.Types;
 
 namespace StormTest;
@@ -18,6 +19,7 @@ struct MatrixBufferData
 }
 class Program
 {
+    static ArrayQueue<TestVertex> testQueue;
     static RSVertexArray<TestVertex> testArray;
     static RSShader<TestVertex> testShader;
     static void Main(string[] args)
@@ -69,6 +71,8 @@ float4 frag(VertexOut input) : SV_Target
                     0, 1, 2
             ], testShader.InputLayout);
             
+            testQueue = new ArrayQueue<TestVertex>(testShader);
+            
             D3D11State.DepthClipEnable = true;
             D3D11State.DepthWriteEnabled = true;
             D3D11State.DepthTestEnabled = true;
@@ -85,13 +89,14 @@ float4 frag(VertexOut input) : SV_Target
                              Matrix4x4.CreatePerspectiveFieldOfView(1.5f, win.GetAspect(), 0.1f, 1024.0f);
         win.ViewUpdate += d =>
         {
+            testQueue.Push(testArray);
             spin += d;
             Matrix4x4 drawMatrix = Matrix4x4.CreateRotationY((float)spin) * projView;
                                    
             data.WorldViewProjection = drawMatrix;
             testShader.Use(win.D3dDeviceContainer);
             testShader.SetCBuffer(win.D3dDeviceContainer, 0, data);
-            testArray.DrawIndexed(win.D3dDeviceContainer);
+            testQueue.DispatchQueue(win.D3dDeviceContainer);
         };
         win.Run();
     }
