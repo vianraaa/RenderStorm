@@ -98,6 +98,7 @@ namespace RenderStorm.Display
         {
             RSDebugger.Init(this);
             double lastFrameTime = SDL.SDL_GetTicks() / 1000.0;
+            PrePostTextDraw("Preloading...");
             ViewBegin?.Invoke();
             D3dDeviceContainer.InitializeRenderStates();
             while (Running)
@@ -163,7 +164,30 @@ namespace RenderStorm.Display
                 Profiler.PopExecution();
                 D3dDeviceContainer.Present();
             }
+            PrePostTextDraw("Shutting down...");
             ViewEnd?.Invoke();
+        }
+
+        private void PrePostTextDraw(string str)
+        {
+            ImGuiDx11Impl.ImGui_ImplDX11_NewFrame();
+            ImGuiSdl2Impl.ImGui_ImplSDL2_NewFrame();
+            SDL.SDL_GetWindowSize(Native, out var wwidth, out var hheight);
+            ImGuiNative.igSetIODisplaySize(wwidth, hheight);
+            ImGuiNative.igSetIOFramebufferScale(1, 1);
+            ImGui.NewFrame();
+            D3dDeviceContainer.ApplyRenderStates();
+            D3dDeviceContainer.SetRenderTargets();
+            D3dDeviceContainer.Clear(0f, 0f, 0f, 1.0f);
+            
+            RSDebugger.DrawDebugText(str, new Vector2(wwidth, hheight) / 2 - ImGui.CalcTextSize(str) / 2.0f);
+            
+            ImGui.Render();
+            unsafe
+            {
+                ImGuiDx11Impl.ImGui_ImplDX11_RenderDrawData(ImGui.GetDrawData());
+            }
+            D3dDeviceContainer.Present();
         }
 
         public void Dispose()
