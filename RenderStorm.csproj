@@ -42,4 +42,8 @@
       <EmbeddedResource Remove="HighLevel\**" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="Profiling\" />
+    </ItemGroup>
+
 </Project>

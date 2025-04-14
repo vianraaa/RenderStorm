@@ -162,7 +162,6 @@ public class RSShader : IProfilerObject, IDisposable
 
         ShaderFlags flags = ShaderFlags.EnableStrictness;
         flags |= ShaderFlags.OptimizationLevel3;
-        
         var result = Compiler.Compile(source, entryPoint , "RenderstormShaderSource", profile);
         byte[] buffer = new byte[result.Length];
         result.CopyTo(buffer);
