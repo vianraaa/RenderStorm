@@ -1,7 +1,10 @@
+using System;
+using System.Numerics;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
 using Vortice.Mathematics;
+using TracyWrapper;
 
 namespace RenderStorm.Display;
 
@@ -120,43 +123,61 @@ public class D3D11DeviceContainer : IDisposable
 
     public void InitializeRenderStates()
     {
-        _rasterizerState = D3D11State.CreateRasterizerState(_device);
-        _depthStencilState = D3D11State.CreateDepthStencilState(_device);
-        _blendState = D3D11State.CreateBlendState(_device);
+        using (new TracyWrapper.ProfileScope("Initialize Render States", ZoneC.DARK_SLATE_BLUE))
+        {
+            _rasterizerState = D3D11State.CreateRasterizerState(_device);
+            _depthStencilState = D3D11State.CreateDepthStencilState(_device);
+            _blendState = D3D11State.CreateBlendState(_device);
+        }
     }
 
     public void ApplyRenderStates()
     {
-        D3D11State.ApplyStateToContext(Context, _rasterizerState, _depthStencilState, _blendState);
+        using (new TracyWrapper.ProfileScope("Apply Render States", ZoneC.DARK_SLATE_GRAY))
+        {
+            D3D11State.ApplyStateToContext(Context, _rasterizerState, _depthStencilState, _blendState);
+        }
     }
 
     public void SetRenderTargets()
     {
-        _context.RSSetViewport(_viewport);
-        _context.OMSetRenderTargets(_renderTargetView, _depthStencilView);
+        using (new TracyWrapper.ProfileScope("Set Render Targets", ZoneC.DARK_ORANGE))
+        {
+            _context.RSSetViewport(_viewport);
+            _context.OMSetRenderTargets(_renderTargetView, _depthStencilView);
+        }
     }
 
     public void Clear(float r, float g, float b, float a)
     {
-        _context.ClearRenderTargetView(_renderTargetView, new Color4(r, g, b, a));
-        _context.ClearDepthStencilView(_depthStencilView, DepthStencilClearFlags.Depth, 1.0f, 0);
+        using (new TracyWrapper.ProfileScope("Clear Render Target", ZoneC.DARK_SLATE_GRAY))
+        {
+            _context.ClearRenderTargetView(_renderTargetView, new Color4(r, g, b, a));
+            _context.ClearDepthStencilView(_depthStencilView, DepthStencilClearFlags.Depth, 1.0f, 0);
+        }
     }
 
     public void Present()
     {
-        _swapChain.Present(VSync ? (uint)1 : 0, PresentFlags.None);
+        using (new TracyWrapper.ProfileScope("Present", ZoneC.DARK_ORANGE))
+        {
+            _swapChain.Present(VSync ? (uint)1 : 0, PresentFlags.None);
+        }
     }
 
     public void Dispose()
     {
-        _renderTargetView?.Dispose();
-        _depthStencilView?.Dispose();
-        _depthStencilTexture?.Dispose();
-        _swapChain?.Dispose();
-        _device?.Dispose();
-        _context?.Dispose();
-        _rasterizerState?.Dispose();
-        _depthStencilState?.Dispose();
-        _blendState?.Dispose();
+        using (new TracyWrapper.ProfileScope("D3D11DeviceContainer Dispose", ZoneC.DARK_SLATE_BLUE))
+        {
+            _renderTargetView?.Dispose();
+            _depthStencilView?.Dispose();
+            _depthStencilTexture?.Dispose();
+            _swapChain?.Dispose();
+            _device?.Dispose();
+            _context?.Dispose();
+            _rasterizerState?.Dispose();
+            _depthStencilState?.Dispose();
+            _blendState?.Dispose();
+        }
     }
 }

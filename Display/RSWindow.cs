@@ -5,6 +5,7 @@ using ImGuiNET;
 using RenderStorm.ImGuiImpl;
 using RenderStorm.Other;
 using SDL2;
+using TracyWrapper;
 
 namespace RenderStorm.Display
 {
@@ -41,34 +42,36 @@ namespace RenderStorm.Display
 
         public RSWindow(string title = "Game", int width = 1024, int height = 600)
         {
-            CachePath = Path.GetFullPath(".renderstorm");
-            Instance = this;
-            
-            if (SDL.SDL_Init(SDL.SDL_INIT_VIDEO) != 0)
+            using (new TracyWrapper.ProfileScope("RSWindow Constructor", ZoneC.DARK_SLATE_BLUE))
             {
-                throw new ApplicationException("Failed to initialize SDL: " + SDL.SDL_GetError());
+                CachePath = Path.GetFullPath(".renderstorm");
+                Instance = this;
+                
+                if (SDL.SDL_Init(SDL.SDL_INIT_VIDEO) != 0)
+                {
+                    throw new ApplicationException("Failed to initialize SDL: " + SDL.SDL_GetError());
+                }
+                
+                Native = SDL.SDL_CreateWindow(title, SDL.SDL_WINDOWPOS_CENTERED, SDL.SDL_WINDOWPOS_CENTERED, width, height, SDL.SDL_WindowFlags.SDL_WINDOW_SHOWN | SDL.SDL_WindowFlags.SDL_WINDOW_RESIZABLE);
+                if (Native == IntPtr.Zero)
+                {
+                    SDL.SDL_Quit();
+                    throw new ApplicationException("Failed to create window: " + SDL.SDL_GetError());
+                }
+                
+                SDL.SDL_SysWMinfo info = new SDL.SDL_SysWMinfo();
+                SDL.SDL_GetWindowWMInfo(Native, ref info);
+                D3dDeviceContainer = new D3D11DeviceContainer(info.info.win.window, (uint)width, (uint)height);
+                CleanInfo = D3dDeviceContainer.GetGroupedInfo();
+                IntPtr ctx = ImGui.CreateContext();
+                ImGui.SetCurrentContext(ctx);
+                ImGuiNative.igStyleSpectrum();
+                ImGuiNative.igSetIODisplaySize(width, height);
+                ImGuiNative.igSetIOFramebufferScale(1, 1);
+                
+                ImGuiSdl2Impl.ImGui_ImplSDL2_InitForD3D(ImGuiSdl2Impl.GetSDLWindow());
+                ImGuiDx11Impl.ImGui_ImplDX11_Init(D3dDeviceContainer.Device.NativePointer, D3dDeviceContainer.Context.NativePointer);
             }
-            
-            Native = SDL.SDL_CreateWindow(title, SDL.SDL_WINDOWPOS_CENTERED, SDL.SDL_WINDOWPOS_CENTERED, width, height, SDL.SDL_WindowFlags.SDL_WINDOW_SHOWN | SDL.SDL_WindowFlags.SDL_WINDOW_RESIZABLE);
-            if (Native == IntPtr.Zero)
-            {
-                SDL.SDL_Quit();
-                throw new ApplicationException("Failed to create window: " + SDL.SDL_GetError());
-            }
-            
-            SDL.SDL_SysWMinfo info = new SDL.SDL_SysWMinfo();
-            SDL.SDL_GetWindowWMInfo(Native, ref info);
-            D3dDeviceContainer = new D3D11DeviceContainer(info.info.win.window, (uint)width, (uint)height);
-            CleanInfo = D3dDeviceContainer.GetGroupedInfo();
-            IntPtr ctx = ImGui.CreateContext();
-            ImGui.SetCurrentContext(ctx);
-            ImGuiNative.igStyleSpectrum();
-            ImGuiNative.igSetIODisplaySize(width, height);
-            ImGuiNative.igSetIOFramebufferScale(1, 1);
-            
-            
-            ImGuiSdl2Impl.ImGui_ImplSDL2_InitForD3D(ImGuiSdl2Impl.GetSDLWindow());
-            ImGuiDx11Impl.ImGui_ImplDX11_Init(D3dDeviceContainer.Device.NativePointer, D3dDeviceContainer.Context.NativePointer);
         }
 
         public Vector2 GetSize()
@@ -181,15 +184,42 @@ namespace RenderStorm.Display
             D3dDeviceContainer.Present();
         }
 
+        public void BeginFrame()
+        {
+            using (new TracyWrapper.ProfileScope("Begin Frame", ZoneC.DARK_ORANGE))
+            {
+                ViewBegin?.Invoke();
+                ImGuiSdl2Impl.ImGui_ImplSDL2_NewFrame();
+                ImGuiDx11Impl.ImGui_ImplDX11_NewFrame();
+                ImGui.NewFrame();
+            }
+        }
+
+        public void EndFrame()
+        {
+            using (new TracyWrapper.ProfileScope("End Frame", ZoneC.DARK_ORANGE))
+            {
+                unsafe
+                {
+                    ImGui.Render();
+                    ImGuiDx11Impl.ImGui_ImplDX11_RenderDrawData(ImGui.GetDrawData());
+                    ViewEnd?.Invoke();
+                }
+            }
+        }
+
         public void Dispose()
         {
-            RSDebugger.Dispose();
-            ImGuiSdl2Impl.ImGui_ImplSDL2_Shutdown();
-            ImGuiDx11Impl.ImGui_ImplDX11_Shutdown();
-            ImGui.DestroyContext();
-            D3dDeviceContainer.Dispose();
-            SDL.SDL_DestroyWindow(Native);
-            SDL.SDL_Quit();
+            using (new TracyWrapper.ProfileScope("RSWindow Dispose", ZoneC.DARK_SLATE_BLUE))
+            {
+                RSDebugger.Dispose();
+                ImGuiSdl2Impl.ImGui_ImplSDL2_Shutdown();
+                ImGuiDx11Impl.ImGui_ImplDX11_Shutdown();
+                ImGui.DestroyContext();
+                D3dDeviceContainer.Dispose();
+                SDL.SDL_DestroyWindow(Native);
+                SDL.SDL_Quit();
+            }
         }
     }
 }

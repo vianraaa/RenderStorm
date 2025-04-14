@@ -13,6 +13,7 @@ using Vortice.Direct3D11;
 using Vortice.Direct3D11.Shader;
 using Vortice.Dxc;
 using Vortice.DXGI;
+using TracyWrapper;
 
 namespace RenderStorm.Abstractions;
 
@@ -28,64 +29,70 @@ public class RSShader : IProfilerObject, IDisposable
     
     private void CreateInputLayoutFromType(ID3D11Device dev, byte[] shaderBytecode, Type type)
     {
-        var fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance);
-        var layoutElements = new List<InputElementDescription>();
-        uint offset = 0;
-
-        foreach (var field in fields)
+        using (new TracyWrapper.ProfileScope("Create Input Layout", ZoneC.DARK_SLATE_GRAY))
         {
-            Format format;
-            uint size;
+            var fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance);
+            var layoutElements = new List<InputElementDescription>();
+            uint offset = 0;
 
-            string semanticName = field.Name;
-            var semanticAttrs = field.GetCustomAttributes(typeof(SemanticNameAttribute), false);
-            if (semanticAttrs.Length > 0)
+            foreach (var field in fields)
             {
-                semanticName = ((SemanticNameAttribute)semanticAttrs[0]).Name;
+                Format format;
+                uint size;
+
+                string semanticName = field.Name;
+                var semanticAttrs = field.GetCustomAttributes(typeof(SemanticNameAttribute), false);
+                if (semanticAttrs.Length > 0)
+                {
+                    semanticName = ((SemanticNameAttribute)semanticAttrs[0]).Name;
+                }
+                
+
+                if (field.FieldType == typeof(Vector3))
+                {
+                    format = Format.R32G32B32_Float;
+                    size = 3 * sizeof(float);
+                }
+                else if (field.FieldType == typeof(Vector2))
+                {
+                    format = Format.R32G32_Float;
+                    size = 2 * sizeof(float);
+                }
+                else if (field.FieldType == typeof(Vector4))
+                {
+                    format = Format.R32G32B32A32_Float;
+                    size = 4 * sizeof(float);
+                }
+                else
+                {
+                    continue;
+                }
+                
+
+                layoutElements.Add(new InputElementDescription(semanticName, 0, format, offset, 0));
+                offset += size;
             }
+
             
-
-            if (field.FieldType == typeof(Vector3))
+            if (layoutElements.Count > 0)
             {
-                format = Format.R32G32B32_Float;
-                size = 3 * sizeof(float);
+                _inputLayout = dev.CreateInputLayout(layoutElements.ToArray(), shaderBytecode);
             }
-            else if (field.FieldType == typeof(Vector2))
-            {
-                format = Format.R32G32_Float;
-                size = 2 * sizeof(float);
-            }
-            else if (field.FieldType == typeof(Vector4))
-            {
-                format = Format.R32G32B32A32_Float;
-                size = 4 * sizeof(float);
-            }
-            else
-            {
-                continue;
-            }
-            
-
-            layoutElements.Add(new InputElementDescription(semanticName, 0, format, offset, 0));
-            offset += size;
-        }
-
-        
-        if (layoutElements.Count > 0)
-        {
-            _inputLayout = dev.CreateInputLayout(layoutElements.ToArray(), shaderBytecode);
         }
     }
     
     private static string ComputeShaderHash(string shaderSource)
     {
-        using (SHA1 sha1 = SHA1.Create())
+        using (new TracyWrapper.ProfileScope("Compute Shader Hash", ZoneC.DARK_SLATE_GRAY))
         {
-            byte[] bytes = sha1.ComputeHash(Encoding.UTF8.GetBytes(shaderSource));
-            StringBuilder builder = new StringBuilder();
-            foreach (byte b in bytes)
-                builder.Append(b.ToString("x2"));
-            return builder.ToString();
+            using (SHA1 sha1 = SHA1.Create())
+            {
+                byte[] bytes = sha1.ComputeHash(Encoding.UTF8.GetBytes(shaderSource));
+                StringBuilder builder = new StringBuilder();
+                foreach (byte b in bytes)
+                    builder.Append(b.ToString("x2"));
+                return builder.ToString();
+            }
         }
     }
 
@@ -141,87 +148,102 @@ public class RSShader : IProfilerObject, IDisposable
 
     protected void CompileShaders(ID3D11Device dev, string shaderSource, Type vertex)
     {
-        byte[] vertexShaderBytecode = CompileShader(shaderSource, DxcShaderStage.Vertex, "vert");
-        byte[] pixelShaderBytecode = CompileShader(shaderSource, DxcShaderStage.Pixel, "frag");
-        
-        string cachePath = Path.Combine(RSWindow.Instance.CachePath, ComputeShaderHash(shaderSource));
-        string fragCache = cachePath + ".fsh";
-        string vertexCache = cachePath + ".vsh";
-        
-        File.WriteAllBytes(fragCache, pixelShaderBytecode);
-        File.WriteAllBytes(vertexCache, vertexShaderBytecode);
+        using (new TracyWrapper.ProfileScope("Compile Shaders", ZoneC.DARK_SLATE_BLUE))
+        {
+            byte[] vertexShaderBytecode = CompileShader(shaderSource, DxcShaderStage.Vertex, "vert");
+            byte[] pixelShaderBytecode = CompileShader(shaderSource, DxcShaderStage.Pixel, "frag");
+            
+            string cachePath = Path.Combine(RSWindow.Instance.CachePath, ComputeShaderHash(shaderSource));
+            string fragCache = cachePath + ".fsh";
+            string vertexCache = cachePath + ".vsh";
+            
+            File.WriteAllBytes(fragCache, pixelShaderBytecode);
+            File.WriteAllBytes(vertexCache, vertexShaderBytecode);
 
-        _vertexShader = dev.CreateVertexShader(vertexShaderBytecode);
-        _pixelShader = dev.CreatePixelShader(pixelShaderBytecode);
-        CreateInputLayoutFromType(dev, vertexShaderBytecode, vertex);
+            _vertexShader = dev.CreateVertexShader(vertexShaderBytecode);
+            _pixelShader = dev.CreatePixelShader(pixelShaderBytecode);
+            CreateInputLayoutFromType(dev, vertexShaderBytecode, vertex);
+        }
     }
 
     private byte[] CompileShader(string source, DxcShaderStage type, string entryPoint = "Main")
     {
-        string profile = type == DxcShaderStage.Vertex ? "vs_5_0" : "ps_5_0";
+        using (new TracyWrapper.ProfileScope("Compile Shader", ZoneC.DARK_SLATE_GRAY))
+        {
+            string profile = type == DxcShaderStage.Vertex ? "vs_5_0" : "ps_5_0";
 
-        ShaderFlags flags = ShaderFlags.EnableStrictness;
-        flags |= ShaderFlags.OptimizationLevel3;
-        var result = Compiler.Compile(source, entryPoint , "RenderstormShaderSource", profile);
-        byte[] buffer = new byte[result.Length];
-        result.CopyTo(buffer);
-        return buffer;
+            ShaderFlags flags = ShaderFlags.EnableStrictness;
+            flags |= ShaderFlags.OptimizationLevel3;
+            var result = Compiler.Compile(source, entryPoint , "RenderstormShaderSource", profile);
+            byte[] buffer = new byte[result.Length];
+            result.CopyTo(buffer);
+            return buffer;
+        }
     }
 
     public unsafe void SetCBuffer<TUniform>(D3D11DeviceContainer container, uint slot, TUniform value)
     {
-        var context = container.Context;
-        if (_disposed)
-            throw new ObjectDisposedException(nameof(RSShader));
-        
-        if (!_constantBuffers.TryGetValue(slot, out var buffer))
+        using (new TracyWrapper.ProfileScope("Set Constant Buffer", ZoneC.DARK_ORANGE))
         {
-            var bufferDesc = new BufferDescription
-            {
-                ByteWidth = (uint)((sizeof(TUniform) + 15) & ~15), // round up to 16 bytes
-                Usage = ResourceUsage.Dynamic,
-                BindFlags = BindFlags.ConstantBuffer,
-                CPUAccessFlags = CpuAccessFlags.Write
-            };
+            var context = container.Context;
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(RSShader));
             
-            buffer = container.Device.CreateBuffer(bufferDesc);
-            buffer.DebugName = $"{DebugName}_CB_Register{slot}";
-            _constantBuffers[slot] = buffer;
+            if (!_constantBuffers.TryGetValue(slot, out var buffer))
+            {
+                var bufferDesc = new BufferDescription
+                {
+                    ByteWidth = (uint)((sizeof(TUniform) + 15) & ~15), // round up to 16 bytes
+                    Usage = ResourceUsage.Dynamic,
+                    BindFlags = BindFlags.ConstantBuffer,
+                    CPUAccessFlags = CpuAccessFlags.Write
+                };
+                
+                buffer = container.Device.CreateBuffer(bufferDesc);
+                buffer.DebugName = $"{DebugName}_CB_Register{slot}";
+                _constantBuffers[slot] = buffer;
+            }
+            
+            var mappedResource = context.Map(buffer, 0, MapMode.WriteDiscard);
+            try
+            {
+                *(TUniform*)mappedResource.DataPointer = value;
+            }
+            finally
+            {
+                context.Unmap(buffer, 0);
+            }
+            
+            context.VSSetConstantBuffer(slot, buffer);
+            context.PSSetConstantBuffer(slot, buffer);
         }
-        
-        var mappedResource = context.Map(buffer, 0, MapMode.WriteDiscard);
-        try
-        {
-            *(TUniform*)mappedResource.DataPointer = value;
-        }
-        finally
-        {
-            context.Unmap(buffer, 0);
-        }
-        
-        context.VSSetConstantBuffer(slot, buffer);
-        context.PSSetConstantBuffer(slot, buffer);
     }
 
     public void Use(D3D11DeviceContainer context)
     {
-        context.Context.IASetInputLayout(_inputLayout);
-        context.Context.VSSetShader(_vertexShader);
-        context.Context.PSSetShader(_pixelShader);
+        using (new TracyWrapper.ProfileScope("Use Shader", ZoneC.DARK_ORANGE))
+        {
+            context.Context.IASetInputLayout(_inputLayout);
+            context.Context.VSSetShader(_vertexShader);
+            context.Context.PSSetShader(_pixelShader);
+        }
     }
 
     public void Dispose()
     {
-        if (!_disposed)
+        using (new TracyWrapper.ProfileScope("RSShader Dispose", ZoneC.DARK_SLATE_BLUE))
         {
-            foreach (var buffer in _constantBuffers.Values)
+            if (!_disposed)
             {
-                buffer.Dispose();
+                foreach (var buffer in _constantBuffers.Values)
+                {
+                    buffer.Dispose();
+                }
+                _constantBuffers.Clear();
+                _vertexShader.Dispose();
+                _pixelShader.Dispose();
+                _inputLayout.Dispose();
             }
-            _constantBuffers.Clear();
-            _vertexShader.Dispose();
-            _pixelShader.Dispose();
-            _inputLayout.Dispose();
         }
     }
 }

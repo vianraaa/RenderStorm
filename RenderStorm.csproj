@@ -12,6 +12,7 @@
 
     <ItemGroup>
         <PackageReference Include="ppy.SDL2-CS" Version="1.0.741-alpha" />
+        <PackageReference Include="TracyWrapper" Version="0.20.2" />
         <PackageReference Include="Vortice.D3DCompiler" Version="3.7.4-beta" />
         <PackageReference Include="Vortice.Direct3D11" Version="3.6.2" />
         <PackageReference Include="Vortice.Dxc" Version="3.7.4-beta" />
