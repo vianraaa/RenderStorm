@@ -1,103 +1,114 @@
 using System;
-using GLFW;
+using Vortice.Direct3D11;
+using Vortice.DXGI;
 using RenderStorm.Display;
 using RenderStorm.Other;
-using Silk.NET.OpenGL;
-using Exception = System.Exception;
+using Vortice.Direct3D;
 
 namespace RenderStorm.Abstractions;
 
 public class RSRenderTarget : IProfilerObject, IDisposable
 {
-    private uint _colorTexture;
-    private uint _depthTexture;
-    private bool _disposed;
-    private int _height;
-    private int _width;
-    private Window _nWindow;
-    
-    public int Width => _width;
-    public int Height => _height;
-    public uint ColorTexture => _colorTexture;
-    public uint DepthTexture => _depthTexture;
+    private readonly RSWindow _window;
+    private readonly ID3D11Device _device;
+    private readonly ID3D11DeviceContext _context;
 
-    public RSRenderTarget(int width, int height, RSWindow win, string debugName = "RenderTexture")
+    public uint Width { get; }
+    public uint Height { get; }
+
+    public ID3D11Texture2D ColorTexture { get; private set; }
+    public ID3D11RenderTargetView RenderTargetView { get; private set; }
+    public ID3D11ShaderResourceView ColorShaderResourceView { get; private set; }
+
+    public ID3D11Texture2D DepthTexture { get; private set; }
+    public ID3D11DepthStencilView DepthStencilView { get; private set; }
+    public ID3D11ShaderResourceView DepthShaderResourceView { get; private set; }
+
+    public RSRenderTarget(RSWindow window, uint width, uint height, string debugName = "RenderTarget")
     {
-        _nWindow = win.Native;
-        DebugName = debugName;
-        _width = width;
-        _height = height;
-        CreateTextures();
-        RSDebugger.RenderTextureCount++;
-        RSDebugger.RenderTextures.Add(this);
+        _window = window;
+        _device = window.D3dDeviceContainer.Device;
+        _context = window.D3dDeviceContainer.Context;
+
+        Width = width;
+        Height = height;
+
+        CreateRenderTargetResources();
+        RSDebugger.RenderTargets.Add(this);
     }
 
-    public void Dispose()
+    private void CreateRenderTargetResources()
     {
-        if (!_disposed)
+        var colorDesc = new Texture2DDescription
         {
-            RSDebugger.RenderTextures.Remove(this);
-            RSDebugger.RenderTextureCount--;
-            OpenGL.API.DeleteTextures(1, ref _colorTexture);
-            OpenGL.API.DeleteTextures(1, ref _depthTexture);
-            OpenGL.API.DeleteFramebuffers(1, ref NativeInstance);
-            _disposed = true;
-        }
-    }
-
-    private unsafe void CreateTextures()
-    {
-        OpenGL.API.GenTextures(1, out _colorTexture);
-        OpenGL.API.BindTexture(TextureTarget.Texture2D, _colorTexture);
-        OpenGL.API.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba, (uint)_width, (uint)_height, 0,
-            PixelFormat.Rgba, PixelType.UnsignedByte, null);
-        OpenGL.API.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter,
-            (int)TextureMinFilter.Linear);
-        OpenGL.API.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter,
-            (int)TextureMagFilter.Linear);
-
-        OpenGL.API.GenTextures(1, out _depthTexture);
-        OpenGL.API.BindTexture(TextureTarget.Texture2D, _depthTexture);
-        OpenGL.API.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.DepthComponent32f, (uint)_width, (uint)_height,
-            0, PixelFormat.DepthComponent, PixelType.Float, null);
-
-        OpenGL.API.GenFramebuffers(1, out NativeInstance);
-        OpenGL.API.BindFramebuffer(FramebufferTarget.Framebuffer, NativeInstance);
-        OpenGL.API.FramebufferTexture(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0,
-            _colorTexture, 0);
-        OpenGL.API.FramebufferTexture(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment,
-            _depthTexture, 0);
-
-        if (OpenGL.API.CheckFramebufferStatus(FramebufferTarget.Framebuffer) != GLEnum.FramebufferComplete)
-            throw new Exception("Framebuffer is not complete");
-
-        OpenGL.API.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+            Width = Width,
+            Height = Height,
+            MipLevels = 1,
+            ArraySize = 1,
+            Format = Format.R8G8B8A8_UNorm,
+            SampleDescription = new SampleDescription(1, 0),
+            Usage = ResourceUsage.Default,
+            BindFlags = BindFlags.RenderTarget | BindFlags.ShaderResource
+        };
+        ColorTexture = _device.CreateTexture2D(colorDesc);
+        RenderTargetView = _device.CreateRenderTargetView(ColorTexture);
+        ColorShaderResourceView = _device.CreateShaderResourceView(ColorTexture);
+        
+        var depthDesc = new Texture2DDescription
+        {
+            Width = Width,
+            Height = Height,
+            MipLevels = 1,
+            ArraySize = 1,
+            Format = Format.R24G8_Typeless,
+            SampleDescription = new SampleDescription(1, 0),
+            Usage = ResourceUsage.Default,
+            BindFlags = BindFlags.DepthStencil | BindFlags.ShaderResource
+        };
+        DepthTexture = _device.CreateTexture2D(depthDesc);
+        
+        var dsvDesc = new DepthStencilViewDescription
+        {
+            Format = Format.D24_UNorm_S8_UInt,
+            ViewDimension = DepthStencilViewDimension.Texture2D
+        };
+        DepthStencilView = _device.CreateDepthStencilView(DepthTexture, dsvDesc);
+        
+        var srvDesc = new ShaderResourceViewDescription
+        {
+            Format = Format.R24_UNorm_X8_Typeless,
+            ViewDimension = ShaderResourceViewDimension.Texture2D,
+            Texture2D = { MipLevels = 1 }
+        };
+        DepthShaderResourceView = _device.CreateShaderResourceView(DepthTexture, srvDesc);
     }
 
     public void Begin()
     {
-        OpenGL.API.Viewport(0, 0, (uint)_width, (uint)_height);
-        OpenGL.API.BindFramebuffer(FramebufferTarget.Framebuffer, NativeInstance);
-        OpenGL.API.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        OpenGL.API.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+        _context.OMSetRenderTargets(RenderTargetView, DepthStencilView);
+        _context.RSSetViewport(0, 0, Width, Height);
+        
+        _context.ClearRenderTargetView(RenderTargetView, new Vortice.Mathematics.Color4(0f, 0f, 0f, 1f));
+        _context.ClearDepthStencilView(DepthStencilView, 
+            DepthStencilClearFlags.Depth | DepthStencilClearFlags.Stencil, 
+            1.0f, 0);
     }
 
     public void End()
     {
-        OpenGL.API.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
-        Glfw.GetFramebufferSize(_nWindow, out var width, out var height);
-        OpenGL.API.Viewport(0, 0, (uint)width, (uint)height);
+        _window.D3dDeviceContainer.SetRenderTargets();
+        _window.D3dDeviceContainer.ApplyRenderStates();
     }
 
-    public void Resize(int width, int height)
+    public void Dispose()
     {
-        _width = width;
-        _height = height;
+        DepthShaderResourceView?.Dispose();
+        DepthStencilView?.Dispose();
+        DepthTexture?.Dispose();
+        ColorShaderResourceView?.Dispose();
+        RenderTargetView?.Dispose();
+        ColorTexture?.Dispose();
 
-        OpenGL.API.DeleteTextures(1, ref _colorTexture);
-        OpenGL.API.DeleteTextures(1, ref _depthTexture);
-        OpenGL.API.DeleteFramebuffers(1, ref NativeInstance);
-
-        CreateTextures();
+        RSDebugger.RenderTargets.Remove(this);
     }
 }

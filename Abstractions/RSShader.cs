@@ -1,37 +1,94 @@
 using System;
 using System.Collections.Generic;
-using System.Net;
+using System.IO;
 using System.Numerics;
-using System.Runtime.InteropServices;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using RenderStorm.Display;
 using RenderStorm.Other;
-using Silk.NET.OpenGL;
+using RenderStorm.Types;
+using Vortice.D3DCompiler;
+using Vortice.Direct3D11;
+using Vortice.Direct3D11.Shader;
+using Vortice.Dxc;
+using Vortice.DXGI;
 
 namespace RenderStorm.Abstractions;
 
 public class RSShader : IProfilerObject, IDisposable
 {
-    private bool _disposed;
-    private static List<RSShader> _shaders = new List<RSShader>();
-    private Dictionary<string, int> _uniforms = new();
-
-    internal static void Shutdown()
+    private readonly Dictionary<string, int> _uniformLocations = new();
+    private readonly Dictionary<uint, ID3D11Buffer> _constantBuffers = new();
+    protected ID3D11VertexShader _vertexShader;
+    protected ID3D11PixelShader _pixelShader;
+    protected ID3D11InputLayout _inputLayout;
+    protected bool _disposed;
+    public ID3D11InputLayout InputLayout => _inputLayout;
+    
+    private void CreateInputLayoutFromType(ID3D11Device dev, byte[] shaderBytecode, Type type)
     {
-        foreach (var shader in _shaders.ToArray())
+        var fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance);
+        var layoutElements = new List<InputElementDescription>();
+        uint offset = 0;
+
+        foreach (var field in fields)
         {
-            shader.Dispose();
+            Format format;
+            uint size;
+            
+            string semanticName = field.Name;
+            var semanticAttrs = field.GetCustomAttributes(typeof(SemanticNameAttribute), false);
+            if (semanticAttrs.Length > 0)
+            {
+                semanticName = ((SemanticNameAttribute)semanticAttrs[0]).Name;
+            }
+            
+            if (field.FieldType == typeof(Vector3))
+            {
+                format = Format.R32G32B32_Float;
+                size = 3 * sizeof(float);
+            }
+            else if (field.FieldType == typeof(Vector2))
+            {
+                format = Format.R32G32_Float;
+                size = 2 * sizeof(float);
+            }
+            else if (field.FieldType == typeof(float))
+            {
+                format = Format.R32_Float;
+                size = sizeof(float);
+            }
+            else if (field.FieldType == typeof(int) || field.FieldType == typeof(uint))
+            {
+                format = Format.R32_SInt;
+                size = sizeof(int);
+            }
+            else if (field.FieldType == typeof(Vector4))
+            {
+                format = Format.R32G32B32A32_Float;
+                size = 4 * sizeof(float);
+            }
+            else
+            {
+                continue;
+            }
+
+            layoutElements.Add(new InputElementDescription(semanticName, 0, format, offset, 0));
+            offset += size;
         }
-        _shaders.Clear();
+        
+        if (layoutElements.Count > 0)
+        {
+            _inputLayout = dev.CreateInputLayout(layoutElements.ToArray(), shaderBytecode);
+        }
     }
     
-    static string HashStr(string rawData)
+    private static string ComputeShaderHash(string shaderSource)
     {
         using (SHA1 sha1 = SHA1.Create())
         {
-            byte[] bytes = sha1.ComputeHash(Encoding.UTF8.GetBytes(rawData));
-
+            byte[] bytes = sha1.ComputeHash(Encoding.UTF8.GetBytes(shaderSource));
             StringBuilder builder = new StringBuilder();
             foreach (byte b in bytes)
                 builder.Append(b.ToString("x2"));
@@ -39,147 +96,145 @@ public class RSShader : IProfilerObject, IDisposable
         }
     }
 
-    public RSShader(string vertexShaderSource, string fragmentShaderSource, string debugName = "Shader")
+    public RSShader(ID3D11Device device, string shaderSource, 
+        Type vertex, string debugName = "Shader")
     {
-        _shaders.Add(this);
         DebugName = debugName;
-        RSDebugger.ShaderCount++;
-        RSDebugger.Shaders.Add(this);
-        // can we find already existing cache?
-        string hash1 = HashStr(vertexShaderSource);
-        string hash2 = HashStr(fragmentShaderSource);
-        string hash3 = HashStr(hash1 + hash2);
-        string CachePath = Path.Combine(RSWindow.Instance.CachePath, hash3);
-        if (File.Exists(CachePath))
+        
+        string cachePath = Path.Combine(RSWindow.Instance.CachePath, ComputeShaderHash(shaderSource));
+        string fragCache = cachePath + ".fsh";
+        string vertexCache = cachePath + ".vsh";
+        if (File.Exists(fragCache) && File.Exists(vertexCache))
         {
-            NativeInstance = OpenGL.API.CreateProgram();
-            byte[] binary = File.ReadAllBytes(CachePath);
-            int formatInt = BitConverter.ToInt32(binary, 0);
-            GLEnum format = (GLEnum)formatInt;
-            binary = binary.Skip(4).ToArray();
-            OpenGL.API.ProgramBinary(NativeInstance, format, MemoryMarshal.CreateReadOnlySpan<byte>(ref binary[0], binary.Length), (uint)binary.Length);
-            OpenGL.API.GetProgram(NativeInstance, ProgramPropertyARB.LinkStatus, out int rstatus);
-            if (rstatus == 0)
-            {
-                goto Continue;
-            }
-
+            var pixelBytes = File.ReadAllBytes(fragCache);
+            var vertexBytes = File.ReadAllBytes(vertexCache);
+            _vertexShader = device.CreateVertexShader(vertexBytes);
+            _pixelShader = device.CreatePixelShader(pixelBytes);
+            CreateInputLayoutFromType(device, vertexBytes, vertex);
+            RSDebugger.Shaders.Add(this);
             return;
         }
-        Continue:
-        var vertexShader = CompileShader(ShaderType.VertexShader, vertexShaderSource);
-        var fragmentShader = CompileShader(ShaderType.FragmentShader, fragmentShaderSource);
 
-        NativeInstance = OpenGL.API.CreateProgram();
-        OpenGL.API.AttachShader(NativeInstance, vertexShader);
-        OpenGL.API.AttachShader(NativeInstance, fragmentShader);
-        OpenGL.API.LinkProgram(NativeInstance);
+        CompileShaders(device, shaderSource, vertex);
+        RSDebugger.Shaders.Add(this);
+    }
+    
+    public RSShader(ID3D11Device device, byte[] vertexBytes, byte[] pixelBytes,
+        Type vertex, string debugName = "Shader")
+    {
+        DebugName = debugName;
 
-        OpenGL.API.GetProgram(NativeInstance, ProgramPropertyARB.LinkStatus, out var status);
-        if (status == 0)
+        _vertexShader = device.CreateVertexShader(vertexBytes);
+        _pixelShader = device.CreatePixelShader(pixelBytes);
+
+        CreateInputLayoutFromType(device, vertexBytes, vertex);
+        RSDebugger.Shaders.Add(this);
+    }
+
+    protected void CompileShaders(ID3D11Device dev, string shaderSource, Type vertex)
+    {
+        byte[] vertexShaderBytecode = CompileShader(shaderSource, DxcShaderStage.Vertex, "vert");
+        byte[] pixelShaderBytecode = CompileShader(shaderSource, DxcShaderStage.Pixel, "frag");
+        
+        string cachePath = Path.Combine(RSWindow.Instance.CachePath, ComputeShaderHash(shaderSource));
+        string fragCache = cachePath + ".fsh";
+        string vertexCache = cachePath + ".vsh";
+        
+        File.WriteAllBytes(fragCache, pixelShaderBytecode);
+        File.WriteAllBytes(vertexCache, vertexShaderBytecode);
+
+        _vertexShader = dev.CreateVertexShader(vertexShaderBytecode);
+        _pixelShader = dev.CreatePixelShader(pixelShaderBytecode);
+        CreateInputLayoutFromType(dev, vertexShaderBytecode, vertex);
+    }
+
+    private byte[] CompileShader(string source, DxcShaderStage type, string entryPoint = "Main")
+    {
+        string profile = type == DxcShaderStage.Vertex ? "vs_5_0" : "ps_5_0";
+
+        ShaderFlags flags = ShaderFlags.EnableStrictness;
+        flags |= ShaderFlags.OptimizationLevel3;
+        
+        var result = Compiler.Compile(source, entryPoint , "RenderstormShaderSource", profile);
+        byte[] buffer = new byte[result.Length];
+        result.CopyTo(buffer);
+        return buffer;
+    }
+
+    public unsafe void SetCBuffer<TUniform>(D3D11DeviceContainer container, uint slot, TUniform value)
+    {
+        var context = container.Context;
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(RSShader));
+        
+        if (!_constantBuffers.TryGetValue(slot, out var buffer))
         {
-            var infoLog = OpenGL.API.GetProgramInfoLog(NativeInstance);
-            throw new Exception($"Shader program linking failed: {infoLog}");
-        }
-        OpenGL.API.GetProgram(NativeInstance, ProgramPropertyARB.ProgramBinaryLength, out int length);
-        GLEnum bformat;
-        byte[] bbinary = new byte[length];
-        unsafe
-        {
-            fixed (byte* binaryPtr = bbinary)
+            var bufferDesc = new BufferDescription
             {
-                OpenGL.API.GetProgramBinary(
-                    NativeInstance,
-                    (uint)length,
-                    out uint actualLength,
-                    out bformat,
-                    binaryPtr
-                );
-            }
+                ByteWidth = (uint)((sizeof(TUniform) + 15) & ~15), // round up to 16 bytes
+                Usage = ResourceUsage.Dynamic,
+                BindFlags = BindFlags.ConstantBuffer,
+                CPUAccessFlags = CpuAccessFlags.Write
+            };
+            
+            buffer = container.Device.CreateBuffer(bufferDesc);
+            buffer.DebugName = $"{DebugName}_CB_Register{slot}";
+            _constantBuffers[slot] = buffer;
         }
-        using (BinaryWriter writer = new BinaryWriter(File.Open(CachePath, FileMode.Create)))
+        
+        var mappedResource = context.Map(buffer, 0, MapMode.WriteDiscard);
+        try
         {
-            writer.Write((int)bformat);
-            writer.Write(bbinary);
+            *(TUniform*)mappedResource.DataPointer = value;
         }
+        finally
+        {
+            context.Unmap(buffer, 0);
+        }
+        
+        context.VSSetConstantBuffers(slot, new[] { buffer });
+        context.PSSetConstantBuffers(slot, new[] { buffer });
+    }
 
-        OpenGL.API.DeleteShader(vertexShader);
-        OpenGL.API.DeleteShader(fragmentShader);
+    public void Use(D3D11DeviceContainer context)
+    {
+        context.Context.IASetInputLayout(_inputLayout);
+        context.Context.VSSetShader(_vertexShader);
+        context.Context.PSSetShader(_pixelShader);
     }
 
     public void Dispose()
     {
         if (!_disposed)
         {
-            _shaders.Remove(this);
-            RSDebugger.Shaders.Remove(this);
-            RSDebugger.ShaderCount--;
-            OpenGL.API.DeleteProgram(NativeInstance);
-            _disposed = true;
+            foreach (var buffer in _constantBuffers.Values)
+            {
+                buffer.Dispose();
+            }
+            _constantBuffers.Clear();
+            _vertexShader.Dispose();
+            _pixelShader.Dispose();
+            _inputLayout.Dispose();
         }
     }
+}
 
-    private uint CompileShader(ShaderType shaderType, string source)
-    {
-        var shader = OpenGL.API.CreateShader(shaderType);
-        OpenGL.API.ShaderSource(shader, source);
-        OpenGL.API.CompileShader(shader);
-
-        OpenGL.API.GetShader(shader, ShaderParameterName.CompileStatus, out var compileStatus);
-        if (compileStatus == 0)
-        {
-            var infoLog = OpenGL.API.GetShaderInfoLog(shader);
-            throw new Exception($"Shader compilation failed ({shaderType}): {infoLog}");
-        }
-
-        return shader;
-    }
-
-    public void Use()
-    {
-        OpenGL.API.UseProgram(NativeInstance);
-    }
+public class RSShader<T> : RSShader where T : unmanaged
+{
+    public RSShader(ID3D11Device device, string shaderSource,
+        string debugName = "Shader") : base(device, shaderSource, typeof(T), debugName) { }
     
-    public int GetUniformLocation(string name)
-    {
-        if(_uniforms.ContainsKey(name))
-            return _uniforms[name];
-        _uniforms.Add(name, OpenGL.API.GetUniformLocation(NativeInstance, name));
-        return _uniforms[name];
-    }
+    public RSShader(ID3D11Device device, byte[] vertexBytes, byte[] pixelBytes,
+        string debugName = "Shader") : base(device, vertexBytes, pixelBytes, typeof(T), debugName) { }
+}
 
-    public void SetUniform(string name, float value)
-    {
-        var location = GetUniformLocation(name);
-        if (location != -1)
-            OpenGL.API.Uniform1(location, value);
-    }
+[AttributeUsage(AttributeTargets.Field)]
+public class SemanticNameAttribute : Attribute
+{
+    public string Name { get; }
     
-    public void SetUniform(string name, int value)
+    public SemanticNameAttribute(string name)
     {
-        var location = GetUniformLocation(name);
-        if (location != -1)
-            OpenGL.API.Uniform1(location, value);
-    }
-
-    public void SetUniform(string name, Vector2 value)
-    {
-        var location = GetUniformLocation(name);
-        if (location != -1)
-            OpenGL.API.Uniform2(location, value);
-    }
-    
-    public void SetUniform(string name, Vector3 value)
-    {
-        var location = GetUniformLocation(name);
-        if (location != -1)
-            OpenGL.API.Uniform3(location, value);
-    }
-    
-    public void SetUniform(string name, Matrix4x4 value)
-    {
-        var location = GetUniformLocation(name);
-        if (location != -1)
-            OpenGL.API.UniformMatrix4(location, false, MemoryMarshal.CreateReadOnlySpan(ref value.M11, 16));
+        Name = name;
     }
 }
