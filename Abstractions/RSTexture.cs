@@ -353,7 +353,5 @@ public sealed class RSTexture : IProfilerObject, IDisposable
         Texture = null;
 
         _disposed = true;
-        
-        GC.SuppressFinalize(this);
     }
 }

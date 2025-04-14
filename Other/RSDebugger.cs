@@ -150,10 +150,7 @@ float4 frag(VertexOut input) : SV_Target
         if (ImGui.Begin("RenderStorm Debugger", ImGuiWindowFlags.NoSavedSettings))
         {
             DrawTabBar();
-            ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(8, 12));
-            ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(6, 4));
             _profilerTabs.ElementAt(_profilerTab).Value.Invoke(container);
-            ImGui.PopStyleVar(2);
         }
         ImGui.End();
 
@@ -186,10 +183,13 @@ float4 frag(VertexOut input) : SV_Target
 
     private static void DrawOverviewTab(D3D11DeviceContainer device)
     {
+        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(8, 12));
+        ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(6, 4));
         ImGui.Spacing();
         DrawPerformanceSection();
         ImGui.Spacing();
         DrawResourceSummarySection();
+        ImGui.PopStyleVar(2);
     }
 
     private static void DrawResourcesTab(D3D11DeviceContainer device)
