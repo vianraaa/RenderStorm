@@ -36,7 +36,7 @@ public class RSShader : IProfilerObject, IDisposable
         {
             Format format;
             uint size;
-            
+
             string semanticName = field.Name;
             var semanticAttrs = field.GetCustomAttributes(typeof(SemanticNameAttribute), false);
             if (semanticAttrs.Length > 0)
@@ -44,6 +44,7 @@ public class RSShader : IProfilerObject, IDisposable
                 semanticName = ((SemanticNameAttribute)semanticAttrs[0]).Name;
             }
             
+
             if (field.FieldType == typeof(Vector3))
             {
                 format = Format.R32G32B32_Float;
@@ -54,16 +55,6 @@ public class RSShader : IProfilerObject, IDisposable
                 format = Format.R32G32_Float;
                 size = 2 * sizeof(float);
             }
-            else if (field.FieldType == typeof(float))
-            {
-                format = Format.R32_Float;
-                size = sizeof(float);
-            }
-            else if (field.FieldType == typeof(int) || field.FieldType == typeof(uint))
-            {
-                format = Format.R32_SInt;
-                size = sizeof(int);
-            }
             else if (field.FieldType == typeof(Vector4))
             {
                 format = Format.R32G32B32A32_Float;
@@ -73,10 +64,12 @@ public class RSShader : IProfilerObject, IDisposable
             {
                 continue;
             }
+            
 
             layoutElements.Add(new InputElementDescription(semanticName, 0, format, offset, 0));
             offset += size;
         }
+
         
         if (layoutElements.Count > 0)
         {
@@ -129,6 +122,21 @@ public class RSShader : IProfilerObject, IDisposable
 
         CreateInputLayoutFromType(device, vertexBytes, vertex);
         RSDebugger.Shaders.Add(this);
+    }
+
+    public void SetResource(D3D11DeviceContainer container, uint register, ID3D11ShaderResourceView view)
+    {
+        container.Context.PSSetShaderResource(register, view);
+    }
+    public void SetSampler(D3D11DeviceContainer container, uint register, ID3D11SamplerState sampler)
+    {
+        container.Context.PSSetSampler(register, sampler);
+    }
+
+    public void SetTexture(D3D11DeviceContainer container, uint register, RSTexture texture)
+    {
+        container.Context.PSSetShaderResource(register, texture.ShaderResourceView);
+        container.Context.PSSetSampler(register, texture.SamplerState);
     }
 
     protected void CompileShaders(ID3D11Device dev, string shaderSource, Type vertex)
@@ -192,8 +200,8 @@ public class RSShader : IProfilerObject, IDisposable
             context.Unmap(buffer, 0);
         }
         
-        context.VSSetConstantBuffers(slot, new[] { buffer });
-        context.PSSetConstantBuffers(slot, new[] { buffer });
+        context.VSSetConstantBuffer(slot, buffer);
+        context.PSSetConstantBuffer(slot, buffer);
     }
 
     public void Use(D3D11DeviceContainer context)

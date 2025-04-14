@@ -9,7 +9,7 @@ namespace RenderStorm.Other;
 
 public struct DebugAttribs
 {
-    public Vector2 POSITION;
+    public Vector3 POSITION;
 }
 public struct DebugConstantBuffer
 {

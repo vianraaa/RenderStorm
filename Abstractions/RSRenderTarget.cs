@@ -26,6 +26,7 @@ public class RSRenderTarget : IProfilerObject, IDisposable
 
     public RSRenderTarget(RSWindow window, uint width, uint height, string debugName = "RenderTarget")
     {
+        DebugName = debugName;
         _window = window;
         _device = window.D3dDeviceContainer.Device;
         _context = window.D3dDeviceContainer.Context;

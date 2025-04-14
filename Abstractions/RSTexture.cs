@@ -310,18 +310,6 @@ public sealed class RSTexture : IProfilerObject, IDisposable
     }
     
     /// <summary>
-    /// Binds the texture to the pixel shader
-    /// </summary>
-    public void BindToPixelShader(ID3D11DeviceContext context, uint slot)
-    {
-        if (context == null) 
-            throw new ArgumentNullException(nameof(context));
-            
-        context.PSSetShaderResource(slot, ShaderResourceView);
-        context.PSSetSampler(slot, SamplerState);
-    }
-    
-    /// <summary>
     /// Binds the texture to the compute shader
     /// </summary>
     public void BindToComputeShader(ID3D11DeviceContext context, uint slot)
