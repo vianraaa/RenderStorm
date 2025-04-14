@@ -1,4 +1,5 @@
-﻿using System.Numerics;
+﻿using System.Drawing;
+using System.Numerics;
 using System.Text;
 using ImGuiNET;
 using RenderStorm.ImGuiImpl;
@@ -179,7 +180,8 @@ namespace RenderStorm.Display
             D3dDeviceContainer.ApplyRenderStates();
             D3dDeviceContainer.SetRenderTargets();
             D3dDeviceContainer.Clear(0f, 0f, 0f, 1.0f);
-            
+            RSDebugger.DrawDebugRect(new Vector2(wwidth, hheight) / 2 - ImGui.CalcTextSize(str) / 2.0f -
+                                     (new Vector2(25) / 2.0f), ImGui.CalcTextSize(str) + new Vector2(25), Color.FromArgb(15, 15 ,25));
             RSDebugger.DrawDebugText(str, new Vector2(wwidth, hheight) / 2 - ImGui.CalcTextSize(str) / 2.0f);
             
             ImGui.Render();

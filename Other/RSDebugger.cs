@@ -140,6 +140,20 @@ float4 frag(VertexOut input) : SV_Target
 
         drawList.AddText(pos, colU32, text);
     }
+    public static void DrawDebugRect(Vector2 position, Vector2 size, Color? color = null)
+    {
+        var col = color ?? Color.White;
+        
+        var drawList = ImGui.GetForegroundDrawList();
+        var colU32 = ImGui.GetColorU32(new System.Numerics.Vector4(
+            col.R / 255f,
+            col.G / 255f,
+            col.B / 255f,
+            col.A / 255f
+        ));
+
+        drawList.AddRectFilled(position, position + size, colU32);
+    }
 
     public static void DrawDebugger(D3D11DeviceContainer container)
     {
