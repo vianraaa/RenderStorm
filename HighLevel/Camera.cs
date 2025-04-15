@@ -18,7 +18,13 @@ public struct Camera
     public Matrix4x4 GetView()
     {
         Matrix4x4 rotation = Matrix4x4.CreateFromYawPitchRoll(Angle.Y, Angle.X, Angle.Z);
-        return Matrix4x4.CreateLookAt(Vector3.Transform(Origin, rotation), Vector3.Zero, Vector3.UnitY);
+
+        // Calculate forward vector based on camera rotation
+        Vector3 forward = Vector3.Transform(new Vector3(0, 0, 1), rotation);
+        Vector3 up = Vector3.Transform(Vector3.UnitY, rotation);
+
+        // Create look-at matrix from camera position to position + forward
+        return Matrix4x4.CreateLookAt(Origin, Origin + forward, Vector3.UnitY);
     }
 
     public Matrix4x4 GetProjection(float aspectRatio)

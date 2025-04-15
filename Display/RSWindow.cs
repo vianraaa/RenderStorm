@@ -17,6 +17,7 @@ namespace RenderStorm.Display
         public Action ViewBegin;
         public Action ViewEnd;
         public Action<double> ViewUpdate;
+        public Action<SDL.SDL_Event> ProcessEvent;
         public bool Running = true;
         public string CleanInfo { get; }
 
@@ -46,19 +47,19 @@ namespace RenderStorm.Display
             {
                 CachePath = Path.GetFullPath(".renderstorm");
                 Instance = this;
-                
+
                 if (SDL.SDL_Init(SDL.SDL_INIT_VIDEO) != 0)
                 {
                     throw new ApplicationException("Failed to initialize SDL: " + SDL.SDL_GetError());
                 }
-                
+
                 Native = SDL.SDL_CreateWindow(title, SDL.SDL_WINDOWPOS_CENTERED, SDL.SDL_WINDOWPOS_CENTERED, width, height, SDL.SDL_WindowFlags.SDL_WINDOW_SHOWN | SDL.SDL_WindowFlags.SDL_WINDOW_RESIZABLE);
                 if (Native == IntPtr.Zero)
                 {
                     SDL.SDL_Quit();
                     throw new ApplicationException("Failed to create window: " + SDL.SDL_GetError());
                 }
-                
+
                 SDL.SDL_SysWMinfo info = new SDL.SDL_SysWMinfo();
                 SDL.SDL_GetWindowWMInfo(Native, ref info);
                 D3dDeviceContainer = new D3D11DeviceContainer(info.info.win.window, (uint)width, (uint)height);
@@ -68,7 +69,7 @@ namespace RenderStorm.Display
                 ImGuiNative.igStyleSpectrum();
                 ImGuiNative.igSetIODisplaySize(width, height);
                 ImGuiNative.igSetIOFramebufferScale(1, 1);
-                
+
                 ImGuiSdl2Impl.ImGui_ImplSDL2_InitForD3D(ImGuiSdl2Impl.GetSDLWindow());
                 ImGuiDx11Impl.ImGui_ImplDX11_Init(D3dDeviceContainer.Device.NativePointer, D3dDeviceContainer.Context.NativePointer);
             }
@@ -110,6 +111,9 @@ namespace RenderStorm.Display
                 while (SDL.SDL_PollEvent(out e) != 0)
                 {
                     ImGuiSdlInput.Process(e);
+
+                    ProcessEvent?.Invoke(e);
+
                     switch (e.type)
                     {
                         case SDL.SDL_EventType.SDL_QUIT:
@@ -132,7 +136,7 @@ namespace RenderStorm.Display
                 ImGuiNative.igSetIODisplaySize(width, height);
                 ImGuiNative.igSetIOFramebufferScale(1, 1);
                 ImGui.NewFrame();
-                
+
                 double currentTime = SDL.SDL_GetTicks() / 1000.0;
                 double deltaTime = currentTime - lastFrameTime;
                 lastFrameTime = currentTime;
@@ -145,7 +149,7 @@ namespace RenderStorm.Display
 
                 if (DebuggerOpen)
                     RSDebugger.DrawDebugger(D3dDeviceContainer);
-                    
+
                 if(DebugString)
                     RSDebugger.DrawDebugText($"{RSDebugger.RSVERSION}\n" +
                                              $"{CleanInfo} DirectX 11\n" +
@@ -175,7 +179,7 @@ namespace RenderStorm.Display
             RSDebugger.DrawDebugRect(new Vector2(wwidth, hheight) / 2 - ImGui.CalcTextSize(str) / 2.0f -
                                      (new Vector2(25) / 2.0f), ImGui.CalcTextSize(str) + new Vector2(25), Color.FromArgb(15, 15 ,25));
             RSDebugger.DrawDebugText(str, new Vector2(wwidth, hheight) / 2 - ImGui.CalcTextSize(str) / 2.0f);
-            
+
             ImGui.Render();
             unsafe
             {

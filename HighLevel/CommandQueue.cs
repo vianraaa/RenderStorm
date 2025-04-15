@@ -18,6 +18,8 @@ public struct CommandQueueData
 {
     public Matrix4x4 ViewProjectionMatrix;
     public Matrix4x4 ModelMatrix;
+    public Vector3 CameraPosition;
+    public float _padding;
 }
 public struct Frustum
 {
@@ -124,7 +126,7 @@ public class CommandQueue(RSShader shader)
     private Queue<ICommandQueueItem> queue = new();
     public RSShader Shader { get; } = shader;
     public CommandQueueData QueueData = new();
-    
+
     private Frustum _cachedFrustum;
     private Matrix4x4 _lastViewProjMatrix;
     private bool _frustumDirty = true;
@@ -135,7 +137,7 @@ public class CommandQueue(RSShader shader)
             return true;
         if (item.AABBMin == null || item.AABBMax == null)
             return true;
-        
+
         if (_frustumDirty || viewProj != _lastViewProjMatrix)
         {
             _cachedFrustum = new Frustum(viewProj);
@@ -152,7 +154,7 @@ public class CommandQueue(RSShader shader)
         for (int i = 0; i < queue.Count; i++)
         {
             ICommandQueueItem queueItem = queue.Dequeue();
-            if(queueItem.VisibilityChecks && 
+            if(queueItem.VisibilityChecks &&
                !IsInViewFrustum(queueItem, QueueData.ViewProjectionMatrix))
             {
                 queue.Enqueue(queueItem);
