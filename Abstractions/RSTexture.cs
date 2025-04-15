@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Numerics;
+using RenderStorm.Display;
 using RenderStorm.Other;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
@@ -333,6 +334,99 @@ public sealed class RSTexture : IProfilerObject, IDisposable
             throw new InvalidOperationException("This texture does not have a UAV");
             
         context.CSSetUnorderedAccessView(slot, UnorderedAccessView);
+    }
+    
+    /// <summary>
+    /// Creates a new texture containing a specified rectangular region of this texture
+    /// </summary>
+    /// <param name="device">D3D11 device</param>
+    /// <param name="context">D3D11 device context</param>
+    /// <param name="x">X coordinate of the top-left corner</param>
+    /// <param name="y">Y coordinate of the top-left corner</param>
+    /// <param name="width">Width of the region</param>
+    /// <param name="height">Height of the region</param>
+    /// <param name="settings">Optional texture creation settings for the new texture</param>
+    /// <param name="debugName">Debug name for the new texture</param>
+    /// <returns>A new RSTexture containing the specified region</returns>
+    public RSTexture GetSubrect(D3D11DeviceContainer container, 
+                              uint x, uint y, uint width, uint height,
+                              TextureCreationSettings? settings = null, 
+                              string debugName = null)
+    {
+        ID3D11Device device = container.Device;
+        ID3D11DeviceContext context = container.Context;
+        if (device == null)
+            throw new ArgumentNullException(nameof(device));
+            
+        if (context == null)
+            throw new ArgumentNullException(nameof(context));
+            
+        // Validate parameters
+        if (x + width > Width)
+            throw new ArgumentException($"Region width ({width}) at X position {x} exceeds source texture width ({Width})");
+            
+        if (y + height > Height)
+            throw new ArgumentException($"Region height ({height}) at Y position {y} exceeds source texture height ({Height})");
+            
+        if (width == 0 || height == 0)
+            throw new ArgumentException("Subrect dimensions must be greater than zero");
+            
+        // Use staging texture to read from source
+        var stagingDesc = new Texture2DDescription
+        {
+            Width = Width,
+            Height = Height,
+            MipLevels = 1,
+            ArraySize = 1,
+            Format = Format,
+            SampleDescription = new SampleDescription(1, 0),
+            Usage = ResourceUsage.Staging,
+            BindFlags = BindFlags.None,
+            CPUAccessFlags = CpuAccessFlags.Read,
+            MiscFlags = ResourceOptionFlags.None
+        };
+        
+        using var stagingTexture = device.CreateTexture2D(stagingDesc);
+        
+        // Copy source texture to staging texture
+        context.CopyResource(Texture, stagingTexture);
+        
+        // Map the staging texture to read pixel data
+        var mappedResource = context.Map(stagingTexture, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.None);
+        try
+        {
+            // Calculate sizes
+            uint srcRowPitch = mappedResource.RowPitch;
+            uint newRowPitch = width * BytesPerPixel;
+            byte[] subPixelData = new byte[width * height * BytesPerPixel];
+            
+            // Create pointer to the first pixel of the source region
+            IntPtr srcPtr = IntPtr.Add(mappedResource.DataPointer, (int)(y * srcRowPitch + x * BytesPerPixel));
+            
+            // Extract the region row by row
+            for (uint row = 0; row < height; row++)
+            {
+                // Copy one row of pixels
+                Marshal.Copy(
+                    IntPtr.Add(srcPtr, (int)(row * srcRowPitch)), 
+                    subPixelData, 
+                    (int)(row * newRowPitch), 
+                    (int)newRowPitch);
+            }
+            
+            // Create the new texture with the extracted data
+            return new RSTexture(
+                device, 
+                width, 
+                height, 
+                subPixelData,
+                settings ?? Settings, // Use original settings by default 
+                debugName ?? $"{DebugName}_Subrect");
+        }
+        finally
+        {
+            context.Unmap(stagingTexture, 0);
+        }
     }
     
     public void Dispose()
