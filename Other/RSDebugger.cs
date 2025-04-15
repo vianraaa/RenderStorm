@@ -349,7 +349,9 @@ float4 frag(VertexOut input) : SV_Target
                     if (index >= RenderTargets.Count)
                         break;
                     var texture = (RSRenderTarget)RenderTargets[index];
-                    ImGui.Image(texture.ColorShaderResourceView.NativePointer, new Vector2(size, size));
+                    IntPtr tex = texture.DepthOnly ? texture.DepthShaderResourceView.NativePointer : texture.ColorShaderResourceView
+                        .NativePointer;
+                    ImGui.Image(tex, new Vector2(size, size));
                     ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(0, 2));
                     if (ImGui.BeginItemTooltip())
                     {
@@ -361,7 +363,7 @@ float4 frag(VertexOut input) : SV_Target
                             ? new Vector2(maxSize, maxSize / aspect)
                             : new Vector2(maxSize * aspect, maxSize);
 
-                        ImGui.Image((IntPtr)texture.ColorShaderResourceView.NativePointer, sizear);
+                        ImGui.Image(tex, sizear);
                         ImGui.Text($"Aspect: {aspect}");
                         ImGui.Text($"{texture.Width}x{texture.Height}");
                         ImGui.EndTooltip();

@@ -122,8 +122,10 @@ public struct Frustum
 public class CommandQueue(RSShader shader)
 {
     private Queue<ICommandQueueItem> queue = new();
-    public RSShader Shader { get; } = shader;
+    public RSShader Shader { get; set; } = shader;
     public CommandQueueData QueueData = new();
+    
+    public Action<D3D11DeviceContainer, RSShader, ICommandQueueItem>? DispatchCallback { get; set; }
     
     private Frustum _cachedFrustum;
     private Matrix4x4 _lastViewProjMatrix;
@@ -148,7 +150,6 @@ public class CommandQueue(RSShader shader)
     public void DispatchQueue(D3D11DeviceContainer container)
     {
         Shader.Use(container); // if not used already
-        Shader.SetCBuffer(container, 0, QueueData);
         for (int i = 0; i < queue.Count; i++)
         {
             ICommandQueueItem queueItem = queue.Dequeue();
@@ -163,6 +164,7 @@ public class CommandQueue(RSShader shader)
             queueItem.DispatchCallback?.Invoke(container, Shader);
             QueueData.ModelMatrix = queueItem.Transform;
             Shader.SetCBuffer(container, 0, QueueData);
+            DispatchCallback?.Invoke(container, Shader, queueItem);
             queueItem.Dispatch(container, Shader);
             queue.Enqueue(queueItem);
         }

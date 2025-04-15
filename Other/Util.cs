@@ -9,4 +9,15 @@ public static class Util
     {
         return value < min ? min : value > max ? max : value;
     }
+    [Pure]
+    public static float Deg2Rad(float degrees)
+    {
+        return degrees * (MathF.PI / 180f);
+    }
+
+    [Pure]
+    public static float Rad2Deg(float radians)
+    {
+        return radians * (180f / MathF.PI);
+    }
 }

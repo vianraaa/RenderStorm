@@ -1,4 +1,5 @@
 using System.Numerics;
+using RenderStorm.Other;
 
 namespace RenderStorm.HighLevel;
 
@@ -18,11 +19,13 @@ public struct Camera
     public Matrix4x4 GetView()
     {
         Matrix4x4 rotation = Matrix4x4.CreateFromYawPitchRoll(Angle.Y, Angle.X, Angle.Z);
-        return Matrix4x4.CreateLookAt(Vector3.Transform(Origin, rotation), Vector3.Zero, Vector3.UnitY);
+        Vector3 forward = Vector3.Transform(-Vector3.UnitZ, rotation);
+        Vector3 up = Vector3.Transform(Vector3.UnitY, rotation);
+        return Matrix4x4.CreateLookAt(Origin, Origin + forward, up);
     }
 
     public Matrix4x4 GetProjection(float aspectRatio)
     {
-        return Matrix4x4.CreatePerspectiveFieldOfView(FOV * (float.Pi / 180f), aspectRatio, NearPlane, FarPlane);
+        return Matrix4x4.CreatePerspectiveFieldOfView(Util.Deg2Rad(FOV), aspectRatio, NearPlane, FarPlane);
     }
 }
