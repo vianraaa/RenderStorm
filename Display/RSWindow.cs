@@ -14,16 +14,9 @@ namespace RenderStorm.Display
         public static RSWindow Instance;
         private string _title = "Game";
         public IntPtr Native;
-        public Action? ViewBegin;
-        public Action? ViewEnd;
-        public Action<double>? ViewUpdate;
-        public Action<SDL.SDL_Keycode>? OnKeyUp;
-        public Action<Vector2, Vector2>? MouseMove;
-        public bool MouseGrabbed { get; private set; }
-
-        public Vector2 MousePosition { get; private set; } = Vector2.Zero;
-        public bool SkipNextMouseEvent = false;
-
+        public Action ViewBegin;
+        public Action ViewEnd;
+        public Action<double> ViewUpdate;
         public bool Running = true;
         public string CleanInfo { get; }
 
@@ -45,18 +38,6 @@ namespace RenderStorm.Display
                 _cachePath = value;
                 Directory.CreateDirectory(Path.GetFullPath(_cachePath));
             }
-        }
-
-        public void GrabMouse()
-        {
-            MouseGrabbed = true;
-            SDL.SDL_SetWindowMouseGrab(Native, SDL.SDL_bool.SDL_TRUE);
-        }
-
-        public void ReleaseMouse()
-        {
-            MouseGrabbed = false;
-            SDL.SDL_SetWindowMouseGrab(Native, SDL.SDL_bool.SDL_FALSE);
         }
 
         public RSWindow(string title = "Game", int width = 1024, int height = 600)
@@ -135,7 +116,6 @@ namespace RenderStorm.Display
                             Running = false;
                             break;
                         case SDL.SDL_EventType.SDL_KEYUP:
-                            OnKeyUp?.Invoke(e.key.keysym.sym);
                             if(e.key.keysym.sym == SDL.SDL_Keycode.SDLK_F2)
                                 DebuggerOpen = !DebuggerOpen;
                             break;
@@ -143,37 +123,6 @@ namespace RenderStorm.Display
                             if (e.window.windowEvent == SDL.SDL_WindowEventID.SDL_WINDOWEVENT_RESIZED)
                             {
                                 D3dDeviceContainer.Resize((uint)e.window.data1, (uint)e.window.data2);
-                            }
-                            break;
-                        case SDL.SDL_EventType.SDL_MOUSEMOTION:
-                            if (SkipNextMouseEvent)
-                            {
-                                SkipNextMouseEvent = false;
-                                break;
-                            }
-                            MousePosition += new Vector2(e.motion.xrel, e.motion.yrel);
-                            MouseMove?.Invoke(new(e.motion.x, e.motion.y), new(e.motion.xrel, e.motion.yrel));
-                            if (MouseGrabbed)
-                            {
-                                const int margin = 1;
-                                int wrapX = e.motion.x;
-                                int wrapY = e.motion.y;
-
-                                if (e.motion.x <= margin)
-                                    wrapX = width - margin - 1;
-                                else if (e.motion.x >= width - margin)
-                                    wrapX = margin + 1;
-
-                                if (e.motion.y <= margin)
-                                    wrapY = height - margin - 1;
-                                else if (e.motion.y >= height - margin)
-                                    wrapY = margin + 1;
-
-                                if (wrapX != e.motion.x || wrapY != e.motion.y)
-                                {
-                                    SDL.SDL_WarpMouseInWindow(Native, wrapX, wrapY);
-                                    SkipNextMouseEvent = true;
-                                }
                             }
                             break;
                     }
@@ -200,7 +149,7 @@ namespace RenderStorm.Display
                 if(DebugString)
                     RSDebugger.DrawDebugText($"{RSDebugger.RSVERSION}\n" +
                                              $"{CleanInfo} DirectX 11\n" +
-                                             $"{(int)(1.0 / deltaTime)}fps");
+                                             $"{(int)(1.0f / deltaTime)}fps");
                 ImGui.Render();
                 unsafe
                 {
