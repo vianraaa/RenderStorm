@@ -10,7 +10,7 @@ public interface ICommandQueueItem
     public Vector3? AABBMin { get; protected set; }
     public Vector3? AABBMax { get; protected set; }
     public Matrix4x4 Transform { get; protected set; }
-    public CommandQueue ParentQueue { get; internal set; }
+    public CommandQueue ParentQueue { get; set; }
     public Action<D3D11DeviceContainer, RSShader>? DispatchCallback  { get; set; }
     public void Dispatch(D3D11DeviceContainer container, RSShader shader);
 }
@@ -19,7 +19,7 @@ public struct CommandQueueData
     public Matrix4x4 ViewProjectionMatrix;
     public Matrix4x4 ModelMatrix;
     public Vector3 CameraPosition;
-    public float _padding;
+    public float _padding; // For 16-byte alignment
 }
 public struct Frustum
 {

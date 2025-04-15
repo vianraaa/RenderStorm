@@ -23,7 +23,7 @@ public static class RSDebugger
     internal static List<IProfilerObject> Textures = new();
     internal static List<IProfilerObject> Shaders = new();
     internal static List<IProfilerObject> RenderTargets = new();
-    
+
 
     private static int selectedQueue = 0;
 
@@ -95,10 +95,10 @@ float3 idToColor(int id) {
 VertexOut vert(VertexIn input, uint vertexID : SV_VertexID)
 {
     VertexOut output;
-    
+
     output.POSITION = mul(float4(input.POSITION, 1.0f), worldViewProjection);
     output.COLOR = idToColor(vertexID);
-    
+
     return output;
 }
 
@@ -117,9 +117,9 @@ float4 frag(VertexOut input) : SV_Target
         _arrayTexture?.Dispose();
         _arrayShader?.Dispose();
     }
-    
+
     /// <summary>
-    /// Don't use this for ANYTHING other than debug, It is slow and inefficient. 
+    /// Don't use this for ANYTHING other than debug, It is slow and inefficient.
     /// </summary>
     /// <param name="text">Text to be rendered</param>
     /// <param name="position">The position of the text relative to the top left corner</param>
@@ -129,7 +129,7 @@ float4 frag(VertexOut input) : SV_Target
         if (string.IsNullOrEmpty(text)) return;
         var col = color ?? Color.White;
         var pos = position ?? Vector2.Zero;
-        
+
         var drawList = ImGui.GetForegroundDrawList();
         var colU32 = ImGui.GetColorU32(new System.Numerics.Vector4(
             col.R / 255f,
@@ -143,7 +143,7 @@ float4 frag(VertexOut input) : SV_Target
     public static void DrawDebugRect(Vector2 position, Vector2 size, Color? color = null)
     {
         var col = color ?? Color.White;
-        
+
         var drawList = ImGui.GetForegroundDrawList();
         var colU32 = ImGui.GetColorU32(new System.Numerics.Vector4(
             col.R / 255f,
@@ -326,7 +326,7 @@ float4 frag(VertexOut input) : SV_Target
                     if (col < columns - 1)
                         ImGui.SameLine();
                 }
-                
+
             }
             ImGui.Spacing();
         }
@@ -349,7 +349,23 @@ float4 frag(VertexOut input) : SV_Target
                     if (index >= RenderTargets.Count)
                         break;
                     var texture = (RSRenderTarget)RenderTargets[index];
-                    ImGui.Image(texture.ColorShaderResourceView.NativePointer, new Vector2(size, size));
+
+                    if (texture.Type == RenderTargetType.DepthOnly || texture.ColorShaderResourceView == null)
+                    {
+                        if (texture.DepthShaderResourceView != null)
+                        {
+                            ImGui.Image(texture.DepthShaderResourceView.NativePointer, new Vector2(size, size));
+                        }
+                        else
+                        {
+                            ImGui.Dummy(new Vector2(size, size));
+                            ImGui.Text("Depth Only");
+                        }
+                    }
+                    else
+                    {
+                        ImGui.Image(texture.ColorShaderResourceView.NativePointer, new Vector2(size, size));
+                    }
                     ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(0, 2));
                     if (ImGui.BeginItemTooltip())
                     {
@@ -361,7 +377,23 @@ float4 frag(VertexOut input) : SV_Target
                             ? new Vector2(maxSize, maxSize / aspect)
                             : new Vector2(maxSize * aspect, maxSize);
 
-                        ImGui.Image((IntPtr)texture.ColorShaderResourceView.NativePointer, sizear);
+                        if (texture.Type == RenderTargetType.DepthOnly || texture.ColorShaderResourceView == null)
+                        {
+                            if (texture.DepthShaderResourceView != null)
+                            {
+                                ImGui.Image((IntPtr)texture.DepthShaderResourceView.NativePointer, sizear);
+                                ImGui.Text("Depth Texture");
+                            }
+                            else
+                            {
+                                ImGui.Dummy(sizear);
+                                ImGui.Text("Depth Only (No Preview Available)");
+                            }
+                        }
+                        else
+                        {
+                            ImGui.Image((IntPtr)texture.ColorShaderResourceView.NativePointer, sizear);
+                        }
                         ImGui.Text($"Aspect: {aspect}");
                         ImGui.Text($"{texture.Width}x{texture.Height}");
                         ImGui.EndTooltip();
@@ -375,7 +407,7 @@ float4 frag(VertexOut input) : SV_Target
                 ImGui.Spacing();
             }
         }
-        
+
         ImGui.Spacing();
     }
 
