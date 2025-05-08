@@ -5,7 +5,9 @@ using System.Runtime.InteropServices;
 namespace ImGuiNET
 {
     public static unsafe partial class ImGuiNative
-    {
+    {        
+        [DllImport("cimgui", CallingConvention = CallingConvention.Cdecl)]
+        public static extern bool igBeginNamedMenuBar(byte* title);
         [DllImport("cimgui", CallingConvention = CallingConvention.Cdecl)]
         public static extern void igStyleSpectrum();
         [DllImport("cimgui", CallingConvention = CallingConvention.Cdecl)]

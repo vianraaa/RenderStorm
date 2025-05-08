@@ -161,7 +161,7 @@ float4 frag(VertexOut input) : SV_Target
         ImGui.SetNextWindowPos(new Vector2(60,60), ImGuiCond.FirstUseEver);
         ImGui.SetNextWindowSizeConstraints(new Vector2(430,356), new Vector2(1000,500));
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(10, 10));
-        if (ImGui.Begin("RenderStorm Debugger", ImGuiWindowFlags.NoSavedSettings))
+        if (ImGui.Begin("RenderStorm Debugger", ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoDocking))
         {
             DrawTabBar();
             _profilerTabs.ElementAt(_profilerTab).Value.Invoke(container);

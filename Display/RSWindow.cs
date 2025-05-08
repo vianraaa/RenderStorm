@@ -41,12 +41,12 @@ namespace RenderStorm.Display
             }
         }
 
-        public RSWindow(string title = "Game", int width = 1024, int height = 600)
+        public RSWindow(string title = "Game", int width = 1024, int height = 600, string cachePath = ".renderstorm")
         {
+            Instance = this;
             using (new TracyWrapper.ProfileScope("RSWindow Constructor", ZoneC.DARK_SLATE_BLUE))
             {
-                CachePath = Path.GetFullPath(".renderstorm");
-                Instance = this;
+                CachePath = Path.GetFullPath(cachePath);
 
                 if (SDL.SDL_Init(SDL.SDL_INIT_VIDEO) != 0)
                 {
