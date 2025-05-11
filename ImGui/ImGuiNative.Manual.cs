@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Runtime.InteropServices;
 
-namespace ImGuiNET
+namespace RenderStorm
 {
     public static unsafe partial class ImGuiNative
     {

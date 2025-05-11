@@ -3,7 +3,7 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace ImGuiNET
+namespace RenderStorm
 {
     public static unsafe partial class ImGui
     {

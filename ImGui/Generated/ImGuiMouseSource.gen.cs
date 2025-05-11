@@ -1,4 +1,4 @@
-namespace ImGuiNET
+namespace RenderStorm
 {
     public enum ImGuiMouseSource
     {

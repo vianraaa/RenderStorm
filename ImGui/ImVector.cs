@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
 
-namespace ImGuiNET
+namespace RenderStorm
 {
     public unsafe struct ImVector
     {

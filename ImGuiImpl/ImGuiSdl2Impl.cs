@@ -1,8 +1,6 @@
 using System.Runtime.InteropServices;
-using ImGuiNET;
-using SDL2;
 
-namespace RenderStorm.ImGuiImpl;
+namespace RenderStormImpl;
 
 public static class ImGuiSdl2Impl
 {

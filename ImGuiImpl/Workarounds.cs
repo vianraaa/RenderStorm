@@ -1,6 +1,6 @@
-using ImGuiNET;
+using RenderStorm;
 
-namespace RenderStorm.ImGuiImpl;
+namespace RenderStormImpl;
 
 public static class Workarounds
 {
@@ -10,9 +10,7 @@ public static class Workarounds
         {
             byte[] titleBytes = System.Text.Encoding.UTF8.GetBytes(title + '\0');
             fixed (byte* titlePtr = titleBytes)
-            {
                 return ImGuiNative.igBeginNamedMenuBar(titlePtr);
-            }
         }
     }
 

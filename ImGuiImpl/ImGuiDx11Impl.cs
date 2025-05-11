@@ -1,8 +1,8 @@
 using System.Runtime.InteropServices;
-using ImGuiNET;
+using RenderStorm;
 using Vortice.Direct3D11;
 
-namespace RenderStorm.ImGuiImpl;
+namespace RenderStormImpl;
 
 public static unsafe class ImGuiDx11Impl
 {

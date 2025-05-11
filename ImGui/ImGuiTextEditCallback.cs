@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace ImGuiNET
+namespace RenderStorm
 {
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public unsafe delegate int ImGuiInputTextCallback(ImGuiInputTextCallbackData* data);

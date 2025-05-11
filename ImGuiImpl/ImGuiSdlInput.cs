@@ -1,8 +1,8 @@
 using System.Text;
-using ImGuiNET;
+using RenderStorm;
 using SDL2;
 
-namespace RenderStorm.ImGuiImpl;
+namespace RenderStormImpl;
 
 public static class ImGuiSdlInput
 {

@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace ImGuiNET
+namespace RenderStorm
 {
     public unsafe struct NullTerminatedString
     {

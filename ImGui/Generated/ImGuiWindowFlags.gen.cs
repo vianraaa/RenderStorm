@@ -1,4 +1,4 @@
-namespace ImGuiNET
+namespace RenderStorm
 {
     [System.Flags]
     public enum ImGuiWindowFlags

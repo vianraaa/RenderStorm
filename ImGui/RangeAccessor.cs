@@ -2,7 +2,7 @@
 using System.Runtime.CompilerServices;
 using System.Text;
 
-namespace ImGuiNET
+namespace RenderStorm
 {
     public unsafe struct RangeAccessor<T> where T : struct
     {

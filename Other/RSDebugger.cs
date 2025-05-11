@@ -1,9 +1,8 @@
 using System.Drawing;
 using System.Numerics;
-using ImGuiNET;
 using RenderStorm.Abstractions;
 using RenderStorm.Display;
-using RenderStorm.ImGuiImpl;
+using RenderStormImpl;
 
 namespace RenderStorm.Other;
 
@@ -157,9 +156,9 @@ float4 frag(VertexOut input) : SV_Target
 
     public static void DrawDebugger(D3D11DeviceContainer container)
     {
-        ImGui.SetNextWindowSize(new Vector2(430,356), ImGuiCond.FirstUseEver);
+        ImGui.SetNextWindowSize(new Vector2(440,326), ImGuiCond.FirstUseEver);
         ImGui.SetNextWindowPos(new Vector2(60,60), ImGuiCond.FirstUseEver);
-        ImGui.SetNextWindowSizeConstraints(new Vector2(430,356), new Vector2(1000,500));
+        ImGui.SetNextWindowSizeConstraints(new Vector2(440,326), new Vector2(1000,500));
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(10, 10));
         if (ImGui.Begin("RenderStorm Debugger", ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoDocking))
         {

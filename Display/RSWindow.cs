@@ -1,9 +1,8 @@
 ﻿using System.Drawing;
 using System.Numerics;
 using System.Text;
-using ImGuiNET;
-using RenderStorm.ImGuiImpl;
 using RenderStorm.Other;
+using RenderStormImpl;
 using SDL2;
 using TracyWrapper;
 
@@ -66,7 +65,7 @@ namespace RenderStorm.Display
                 CleanInfo = D3dDeviceContainer.GetGroupedInfo();
                 IntPtr ctx = ImGui.CreateContext();
                 ImGui.SetCurrentContext(ctx);
-                ImGuiNative.igStyleSpectrum();
+                /*ImGuiNative.igStyleSpectrum();*/
                 ImGuiNative.igSetIODisplaySize(width, height);
                 ImGuiNative.igSetIOFramebufferScale(1, 1);
 
