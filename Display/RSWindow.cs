@@ -42,6 +42,7 @@ namespace RenderStorm.Display
 
         public RSWindow(string title = "Game", int width = 1024, int height = 600, string cachePath = ".renderstorm")
         {
+            TracyWrapper.Profiler.InitThread();
             Instance = this;
             using (new TracyWrapper.ProfileScope("RSWindow Constructor", ZoneC.DARK_SLATE_BLUE))
             {
@@ -71,6 +72,7 @@ namespace RenderStorm.Display
 
                 ImGuiSdl2Impl.ImGui_ImplSDL2_InitForD3D(ImGuiSdl2Impl.GetSDLWindow());
                 ImGuiDx11Impl.ImGui_ImplDX11_Init(D3dDeviceContainer.Device.NativePointer, D3dDeviceContainer.Context.NativePointer);
+                PrePostTextDraw("Preloading...");
             }
         }
 
@@ -100,11 +102,11 @@ namespace RenderStorm.Display
         {
             RSDebugger.Init(this);
             double lastFrameTime = SDL.SDL_GetTicks() / 1000.0;
-            PrePostTextDraw("Preloading...");
             ViewBegin?.Invoke();
             D3dDeviceContainer.InitializeRenderStates();
             while (Running)
             {
+                TracyWrapper.Profiler.HeartBeat();
                 SDL.SDL_GetWindowSize(Native, out var width, out var height);
                 SDL.SDL_Event e;
                 while (SDL.SDL_PollEvent(out e) != 0)
