@@ -7,11 +7,8 @@ using System.Security.Cryptography;
 using System.Text;
 using RenderStorm.Display;
 using RenderStorm.Other;
-using RenderStorm.Types;
 using Vortice.D3DCompiler;
 using Vortice.Direct3D11;
-using Vortice.Direct3D11.Shader;
-using Vortice.Dxc;
 using Vortice.DXGI;
 using TracyWrapper;
 
@@ -150,8 +147,8 @@ public class RSShader : IProfilerObject, IDisposable
     {
         using (new TracyWrapper.ProfileScope("Compile Shaders", ZoneC.DARK_SLATE_BLUE))
         {
-            byte[] vertexShaderBytecode = CompileShader(shaderSource, DxcShaderStage.Vertex, "vert");
-            byte[] pixelShaderBytecode = CompileShader(shaderSource, DxcShaderStage.Pixel, "frag");
+            byte[] vertexShaderBytecode = CompileShader(shaderSource, "vs_5_0", "vert");
+            byte[] pixelShaderBytecode = CompileShader(shaderSource, "ps_5_0", "frag");
             
             string cachePath = Path.Combine(RSWindow.Instance.CachePath, ComputeShaderHash(shaderSource));
             string fragCache = cachePath + ".fsh";
@@ -165,13 +162,11 @@ public class RSShader : IProfilerObject, IDisposable
             CreateInputLayoutFromType(dev, vertexShaderBytecode, vertex);
         }
     }
-
-    private byte[] CompileShader(string source, DxcShaderStage type, string entryPoint = "Main")
+    /// "vs_5_0" : "ps_5_0"
+    private byte[] CompileShader(string source, string profile, string entryPoint = "Main")
     {
         using (new TracyWrapper.ProfileScope("Compile Shader", ZoneC.DARK_SLATE_GRAY))
         {
-            string profile = type == DxcShaderStage.Vertex ? "vs_5_0" : "ps_5_0";
-
             ShaderFlags flags = ShaderFlags.EnableStrictness;
             flags |= ShaderFlags.OptimizationLevel3;
             var result = Compiler.Compile(source, entryPoint , "RenderstormShaderSource", profile);

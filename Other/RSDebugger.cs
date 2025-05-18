@@ -36,7 +36,7 @@ public static class RSDebugger
     private static readonly Vector4 _inactiveTabColor = new(0.3f, 0.3f, 0.3f, 0.4f);
     public static double TimeElapsed { get; internal set; } = 0;
     public static double DeltaTime { get; internal set; }
-    public const string RSVERSION = "RENDERSTORM 0.1.1";
+    public const string RSVERSION = "RENDERSTORM 0.1.2";
     public static RSWindow RSWindow { get; private set; }
     private static RSRenderTarget? _arrayTexture;
     private static RSShader? _arrayShader;
