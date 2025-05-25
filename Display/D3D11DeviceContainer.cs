@@ -16,10 +16,10 @@ public class D3D11DeviceContainer : IDisposable
     private ID3D11RenderTargetView _renderTargetView;
     private ID3D11Texture2D _depthStencilTexture;
     private ID3D11DepthStencilView _depthStencilView;
-    
-    private ID3D11RasterizerState _rasterizerState;
-    private ID3D11DepthStencilState _depthStencilState;
-    private ID3D11BlendState _blendState;
+
+    public ID3D11RasterizerState RasterizerState;
+    public ID3D11DepthStencilState DepthStencilState;
+    public ID3D11BlendState BlendState;
     
     private IntPtr _windowHandle;
     private Viewport _viewport;
@@ -53,7 +53,7 @@ public class D3D11DeviceContainer : IDisposable
         _viewport = new Viewport(0, 0, width, height);
     }
 
-    private void InitializeDeviceAndSwapChain(uint width, uint height)
+    private void  InitializeDeviceAndSwapChain(uint width, uint height)
     {
         var swapChainDesc = new SwapChainDescription
         {
@@ -76,7 +76,7 @@ public class D3D11DeviceContainer : IDisposable
         D3D11.D3D11CreateDeviceAndSwapChain(
             null,
             DriverType.Hardware,
-            DeviceCreationFlags.BgraSupport,
+            DeviceCreationFlags.Debug,
             new[] { FeatureLevel.Level_11_0 },
             swapChainDesc,
             out _swapChain,
@@ -125,9 +125,9 @@ public class D3D11DeviceContainer : IDisposable
     {
         using (new TracyWrapper.ProfileScope("Initialize Render States", ZoneC.DARK_SLATE_BLUE))
         {
-            _rasterizerState = D3D11State.CreateRasterizerState(_device);
-            _depthStencilState = D3D11State.CreateDepthStencilState(_device);
-            _blendState = D3D11State.CreateBlendState(_device);
+            RasterizerState = D3D11State.CreateRasterizerState(_device);
+            DepthStencilState = D3D11State.CreateDepthStencilState(_device);
+            BlendState = D3D11State.CreateBlendState(_device);
         }
     }
 
@@ -135,7 +135,7 @@ public class D3D11DeviceContainer : IDisposable
     {
         using (new TracyWrapper.ProfileScope("Apply Render States", ZoneC.DARK_SLATE_GRAY))
         {
-            D3D11State.ApplyStateToContext(Context, _rasterizerState, _depthStencilState, _blendState);
+            D3D11State.ApplyStateToContext(Context, RasterizerState, DepthStencilState, BlendState);
         }
     }
 
@@ -175,9 +175,9 @@ public class D3D11DeviceContainer : IDisposable
             _swapChain?.Dispose();
             _device?.Dispose();
             _context?.Dispose();
-            _rasterizerState?.Dispose();
-            _depthStencilState?.Dispose();
-            _blendState?.Dispose();
+            RasterizerState?.Dispose();
+            DepthStencilState?.Dispose();
+            BlendState?.Dispose();
         }
     }
 }

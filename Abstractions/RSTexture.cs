@@ -78,7 +78,7 @@ public sealed class RSTexture : IProfilerObject, IDisposable
     public ID3D11SamplerState SamplerState { get; private set; }
     public ID3D11UnorderedAccessView UnorderedAccessView { get; private set; }
     
-    private bool _disposed;
+    public bool Disposed { get; private set; }
     
     /// <summary>
     /// Creates a new texture with optional initial data
@@ -431,7 +431,7 @@ public sealed class RSTexture : IProfilerObject, IDisposable
     
     public void Dispose()
     {
-        if (_disposed) 
+        if (Disposed) 
             return;
 
         RSDebugger.Textures.Remove(this);
@@ -446,6 +446,6 @@ public sealed class RSTexture : IProfilerObject, IDisposable
         SamplerState = null;
         Texture = null;
 
-        _disposed = true;
+        Disposed = true;
     }
 }

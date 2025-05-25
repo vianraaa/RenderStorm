@@ -16,8 +16,6 @@ public class RSVertexArray<T> :  IProfilerObject, IDrawableArray, IDisposable wh
         private readonly RSBuffer<uint>? _indexBuffer;
         private readonly RSBuffer<T>? _vertexBuffer;
         private readonly ID3D11Device _device;
-        
-        public Action<ID3D11DeviceContext>? OnPreDraw;
 
         public RSVertexArray(ID3D11Device device, ReadOnlySpan<T> vertices, ReadOnlySpan<uint> indices,
             string debugName = "VertexArray")
@@ -51,7 +49,6 @@ public class RSVertexArray<T> :  IProfilerObject, IDrawableArray, IDisposable wh
         {
             var context = container.Context;
             Bind(container);
-            OnPreDraw?.Invoke(context);
             context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
             context.DrawIndexed((uint)_indexBuffer.ItemCount, 0, 0);
         }

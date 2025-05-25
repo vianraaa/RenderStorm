@@ -170,8 +170,13 @@ float4 frag(VertexOut input) : SV_Target
         ImGui.PopStyleVar();
     }
 
-    public static void PushCustomMenu(string name, Action<D3D11DeviceContainer> layoutFunction)
+    public static void PushCustomMenu(string name, Action<D3D11DeviceContainer>? layoutFunction)
     {
+        if (layoutFunction == null)
+        {
+            _profilerTabs.Remove(name);
+            return;
+        }
         _profilerTabs.Add(name, layoutFunction);
     }
 

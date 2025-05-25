@@ -47,13 +47,14 @@ namespace RenderStorm.Display
             using (new TracyWrapper.ProfileScope("RSWindow Constructor", ZoneC.DARK_SLATE_BLUE))
             {
                 CachePath = Path.GetFullPath(cachePath);
-
+                SDL.SDL_SetHint("SDL_HINT_WINDOWS_DPI_AWARENESS", "permonitorv2"); // or "permonitor"
+                SDL.SDL_SetHint("SDL_HINT_WINDOWS_DPI_SCALING", "1");
                 if (SDL.SDL_Init(SDL.SDL_INIT_VIDEO) != 0)
                 {
                     throw new ApplicationException("Failed to initialize SDL: " + SDL.SDL_GetError());
                 }
 
-                Native = SDL.SDL_CreateWindow(title, SDL.SDL_WINDOWPOS_CENTERED, SDL.SDL_WINDOWPOS_CENTERED, width, height, SDL.SDL_WindowFlags.SDL_WINDOW_SHOWN | SDL.SDL_WindowFlags.SDL_WINDOW_RESIZABLE);
+                Native = SDL.SDL_CreateWindow(title, SDL.SDL_WINDOWPOS_CENTERED, SDL.SDL_WINDOWPOS_CENTERED, width, height, SDL.SDL_WindowFlags.SDL_WINDOW_SHOWN | SDL.SDL_WindowFlags.SDL_WINDOW_RESIZABLE | SDL.SDL_WindowFlags.SDL_WINDOW_ALLOW_HIGHDPI);
                 if (Native == IntPtr.Zero)
                 {
                     SDL.SDL_Quit();
@@ -62,12 +63,13 @@ namespace RenderStorm.Display
 
                 SDL.SDL_SysWMinfo info = new SDL.SDL_SysWMinfo();
                 SDL.SDL_GetWindowWMInfo(Native, ref info);
-                D3dDeviceContainer = new D3D11DeviceContainer(info.info.win.window, (uint)width, (uint)height);
+                SDL.SDL_Vulkan_GetDrawableSize(Native, out int w, out var h); 
+                D3dDeviceContainer = new D3D11DeviceContainer(info.info.win.window, (uint)w, (uint)h);
                 CleanInfo = D3dDeviceContainer.GetGroupedInfo();
                 IntPtr ctx = ImGui.CreateContext();
                 ImGui.SetCurrentContext(ctx);
                 /*ImGuiNative.igStyleSpectrum();*/
-                ImGuiNative.igSetIODisplaySize(width, height);
+                ImGuiNative.igSetIODisplaySize(w, h);
                 ImGuiNative.igSetIOFramebufferScale(1, 1);
 
                 ImGuiSdl2Impl.ImGui_ImplSDL2_InitForD3D(ImGuiSdl2Impl.GetSDLWindow());
@@ -78,13 +80,13 @@ namespace RenderStorm.Display
 
         public Vector2 GetSize()
         {
-            SDL.SDL_GetWindowSize(Native, out var width, out var height);
+            SDL.SDL_Vulkan_GetDrawableSize(Native, out var width, out var height);
             return new Vector2(width, height);
         }
 
         public float GetAspect()
         {
-            SDL.SDL_GetWindowSize(Native, out var width, out var height);
+            SDL.SDL_Vulkan_GetDrawableSize(Native, out var width, out var height);
             return width / (float)height;
         }
 
@@ -107,7 +109,7 @@ namespace RenderStorm.Display
             while (Running)
             {
                 TracyWrapper.Profiler.HeartBeat();
-                SDL.SDL_GetWindowSize(Native, out var width, out var height);
+                SDL.SDL_Vulkan_GetDrawableSize(Native, out var width, out var height);
                 SDL.SDL_Event e;
                 while (SDL.SDL_PollEvent(out e) != 0)
                 {
@@ -127,7 +129,9 @@ namespace RenderStorm.Display
                         case SDL.SDL_EventType.SDL_WINDOWEVENT:
                             if (e.window.windowEvent == SDL.SDL_WindowEventID.SDL_WINDOWEVENT_RESIZED)
                             {
-                                D3dDeviceContainer.Resize((uint)e.window.data1, (uint)e.window.data2);
+                                // Fix on hiDPI displays
+                                SDL.SDL_Vulkan_GetDrawableSize(Native, out var drawableW, out var drawableH);
+                                D3dDeviceContainer.Resize((uint)drawableW, (uint)drawableH);
                             }
                             break;
                     }

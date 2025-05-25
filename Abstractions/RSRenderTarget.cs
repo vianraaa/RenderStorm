@@ -45,6 +45,8 @@ public class RSRenderTarget : IProfilerObject, IDisposable
 
         CreateRenderTargetResources();
         RSDebugger.RenderTargets.Add(this);
+        Begin();
+        End();
     }
 
     private void CreateRenderTargetResources()
