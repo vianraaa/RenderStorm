@@ -22,12 +22,18 @@ public static class RSDebugger
     internal static List<IProfilerObject> Textures = new();
     internal static List<IProfilerObject> Shaders = new();
     internal static List<IProfilerObject> RenderTargets = new();
+    
+    private static List<IProfilerObject> _buffersSearchCache = new();
+    private static List<IProfilerObject> _vertexArraysSearchCache = new();
+    private static List<IProfilerObject> _texturesSearchCache = new();
+    private static List<IProfilerObject> _renderTargetsSearchCache = new();
+
 
 
     private static int selectedQueue = 0;
 
     private static int _profilerTab;
-    private static Dictionary<string, Action<D3D11DeviceContainer>> _profilerTabs = new()
+    private static Dictionary<string, Action> _profilerTabs = new()
     {
         { "Overview", DrawOverviewTab },
         { "Resources", DrawResourcesTab }
@@ -36,10 +42,11 @@ public static class RSDebugger
     private static readonly Vector4 _inactiveTabColor = new(0.3f, 0.3f, 0.3f, 0.4f);
     public static double TimeElapsed { get; internal set; } = 0;
     public static double DeltaTime { get; internal set; }
-    public const string RSVERSION = "RENDERSTORM 0.1.2";
+    public const string RSVERSION = "RENDERSTORM 0.1.3";
     public static RSWindow RSWindow { get; private set; }
     private static RSRenderTarget? _arrayTexture;
     private static RSShader? _arrayShader;
+    private static string _resourceSearchTerm = "";
 
     private static float _previewCamZoom = 1;
     private static float _previewCamZoomTarget = 1;
@@ -53,11 +60,11 @@ public static class RSDebugger
     public static void Init(RSWindow window)
     {
         ImGuiSdlInput.OnScroll += onScroll;
-        _arrayTexture = new RSRenderTarget(window, 256, 256);
+        _arrayTexture = new RSRenderTarget(256, 256);
         RenderTargets.Remove(_arrayTexture);
         _arrayTexture?.Begin();
         _arrayTexture?.End();
-        _arrayShader = new RSShader<DebugAttribs>(window.D3dDeviceContainer.Device, @"
+        _arrayShader = new RSShader<DebugAttribs>(@"
 cbuffer DebugConstantBuffer : register(b0)
 {
     row_major float4x4 worldViewProjection;
@@ -123,13 +130,13 @@ float4 frag(VertexOut input) : SV_Target
     /// <param name="text">Text to be rendered</param>
     /// <param name="position">The position of the text relative to the top left corner</param>
     /// <param name="color">The color of the text</param>
-    public static void DrawDebugText(string text, Vector2? position = null, Color? color = null)
+    public static void DrawDebugText(string text, Vector2? position = null, Color? color = null, bool bg = false)
     {
         if (string.IsNullOrEmpty(text)) return;
         var col = color ?? Color.White;
         var pos = position ?? Vector2.Zero;
 
-        var drawList = ImGui.GetForegroundDrawList();
+        var drawList = bg ? ImGui.GetBackgroundDrawList() : ImGui.GetForegroundDrawList();
         var colU32 = ImGui.GetColorU32(new System.Numerics.Vector4(
             col.R / 255f,
             col.G / 255f,
@@ -139,11 +146,11 @@ float4 frag(VertexOut input) : SV_Target
 
         drawList.AddText(pos, colU32, text);
     }
-    public static void DrawDebugRect(Vector2 position, Vector2 size, Color? color = null)
+    public static void DrawDebugRect(Vector2 position, Vector2 size, Color? color = null, bool bg = false)
     {
         var col = color ?? Color.White;
 
-        var drawList = ImGui.GetForegroundDrawList();
+        var drawList = bg ? ImGui.GetBackgroundDrawList() : ImGui.GetForegroundDrawList();
         var colU32 = ImGui.GetColorU32(new System.Numerics.Vector4(
             col.R / 255f,
             col.G / 255f,
@@ -153,24 +160,46 @@ float4 frag(VertexOut input) : SV_Target
 
         drawList.AddRectFilled(position, position + size, colU32);
     }
-
-    public static void DrawDebugger(D3D11DeviceContainer container)
+    
+    public static void DrawDebugRectLines(Vector2 position, Vector2 size, Color? color = null, bool bg = false)
     {
-        ImGui.SetNextWindowSize(new Vector2(440,326), ImGuiCond.FirstUseEver);
+        var col = color ?? Color.White;
+
+        var drawList = bg ? ImGui.GetBackgroundDrawList() : ImGui.GetForegroundDrawList();
+        var colU32 = ImGui.GetColorU32(new System.Numerics.Vector4(
+            col.R / 255f,
+            col.G / 255f,
+            col.B / 255f,
+            col.A / 255f
+        ));
+
+        drawList.AddRect(position, position + size, colU32);
+    }
+    
+    private static string LimitText(string text, int maxLength = 40)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        return text.Length > maxLength ? text[..maxLength] + "..." : text;
+    }
+
+    public static void DrawDebugger()
+    {
         ImGui.SetNextWindowPos(new Vector2(60,60), ImGuiCond.FirstUseEver);
-        ImGui.SetNextWindowSizeConstraints(new Vector2(440,326), new Vector2(1000,500));
+        ImGui.SetNextWindowSize(new Vector2(450,0), ImGuiCond.Always);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(10, 10));
-        if (ImGui.Begin("RenderStorm Debugger", ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoDocking))
+        if (ImGui.Begin("RenderStorm Debugger", ImGuiWindowFlags.NoSavedSettings | 
+                                                ImGuiWindowFlags.NoDocking | ImGuiWindowFlags.AlwaysAutoResize))
         {
+            ImGui.SetWindowFocus("RenderStorm Debugger");
             DrawTabBar();
-            _profilerTabs.ElementAt(_profilerTab).Value.Invoke(container);
+            _profilerTabs.ElementAt(_profilerTab).Value.Invoke();
         }
         ImGui.End();
 
         ImGui.PopStyleVar();
     }
 
-    public static void PushCustomMenu(string name, Action<D3D11DeviceContainer>? layoutFunction)
+    public static void PushCustomMenu(string name, Action? layoutFunction)
     {
         if (layoutFunction == null)
         {
@@ -199,7 +228,7 @@ float4 frag(VertexOut input) : SV_Target
         ImGui.Separator();
     }
 
-    private static void DrawOverviewTab(D3D11DeviceContainer device)
+    private static void DrawOverviewTab()
     {
         ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(8, 12));
         ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(6, 4));
@@ -210,71 +239,78 @@ float4 frag(VertexOut input) : SV_Target
         ImGui.PopStyleVar(2);
     }
 
-    private static void DrawResourcesTab(D3D11DeviceContainer device)
+    private static void DrawResourcesTab()
     {
-        float x = ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X / 2f;
-        const string msg = "The resources displayed are ONLY allocated by RenderStorm";
-        x -= ImGui.CalcTextSize(msg).X/2;
-        ImGui.SetCursorPosX(x);
-        ImGui.Text(msg);
-        if (ImGui.CollapsingHeader("Arrays", ImGuiTreeNodeFlags.DefaultOpen))
+        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+        ImGui.Spacing();
+        ImGui.InputTextWithHint("##resSearch", "Search...", ref _resourceSearchTerm, 256);
+        ImGui.Spacing();
+        if (ImGui.CollapsingHeader("Arrays"))
         {
+            _vertexArraysSearchCache = VertexArrays.Where(b => b.DebugName.Contains(_resourceSearchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
             ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(0, 2));
-            if (VertexArrays.Count == 0)
+            if (_vertexArraysSearchCache.Count == 0)
             {
                 ImGui.SetCursorPosX((ImGui.GetContentRegionAvail().X - ImGui.CalcTextSize("empty. this is awkward...").X) * 0.5f);
                 ImGui.Text("empty. this is awkward...");
             }
-            foreach (var obj in VertexArrays)
+            bool tooltipOpen = false;
+
+            foreach (var obj in _vertexArraysSearchCache)
             {
                 var buf = (IDrawableArray)obj;
                 ImGui.BeginChild($"{obj.DebugName}{obj.NativeInstance}", new Vector2(ImGui.GetContentRegionAvail().X, 0),
                     ImGuiChildFlags.AlwaysAutoResize | ImGuiChildFlags.AutoResizeY | ImGuiChildFlags.FrameStyle);
-                ImGui.Text($"{obj.DebugName}({obj.NativeInstance})");
+                ImGui.Text($"{LimitText(obj.DebugName)}({obj.NativeInstance})");
                 ImGui.EndChild();
+
                 if (ImGui.BeginItemTooltip())
                 {
+                    tooltipOpen = true;
+
                     _previewCamZoom = float.Lerp(_previewCamZoom, _previewCamZoomTarget, (float)(DeltaTime * 8));
-                    ImGuiSdlInput.CanScroll = false;
                     ImGui.SeparatorText(obj.DebugName);
+
                     _arrayTexture.Begin();
-                    _arrayShader.Use(device);
+                    _arrayShader.Use();
+
                     Matrix4x4 projection = Matrix4x4.CreatePerspectiveFieldOfView(1.6f, 1, 0.01f, 1000);
                     float angle = (float)TimeElapsed;
                     Vector3 eye = Vector3.Transform(new Vector3(0, 0.5f, 1) * _previewCamZoom, Matrix4x4.CreateRotationY(angle));
                     Matrix4x4 view = Matrix4x4.CreateLookAt(eye, Vector3.Zero, Vector3.UnitY);
                     _previewConstantBuffer.worldViewProjection = view * projection;
-                    _arrayShader.Use(device);
-                    _arrayShader.SetCBuffer(device, 0, _previewConstantBuffer);
-                    buf.DrawIndexed(device);
+                    _arrayShader.Use();
+                    _arrayShader.SetCBuffer(0, _previewConstantBuffer);
+
+                    buf.DrawIndexed();
+
                     _arrayTexture.End();
-                    ImGui.Image((IntPtr)_arrayTexture?.ColorShaderResourceView.NativePointer, new Vector2(256, 256));
+
+                    ImGui.Image(_arrayTexture.ColorShaderResourceView.NativePointer, new Vector2(256, 256));
                     ImGui.EndTooltip();
                 }
-                else
-                {
-                    ImGuiSdlInput.CanScroll = true;
-                }
             }
+
+            ImGuiSdlInput.CanScroll = !tooltipOpen;
 
             ImGui.PopStyleVar();
             ImGui.Spacing();
         }
-        ImGui.Separator();
-        if (ImGui.CollapsingHeader("Buffers", ImGuiTreeNodeFlags.DefaultOpen))
+        if (ImGui.CollapsingHeader("Buffers"))
         {
+            _buffersSearchCache = Buffers.Where(b => b.DebugName.Contains(_resourceSearchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
             ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(0, 2));
-            if (Buffers.Count == 0)
+            if (_buffersSearchCache.Count == 0)
             {
                 ImGui.SetCursorPosX((ImGui.GetContentRegionAvail().X - ImGui.CalcTextSize("empty. this is awkward...").X) * 0.5f);
                 ImGui.Text("empty. this is awkward...");
             }
-            foreach (var obj in Buffers)
+            foreach (var obj in _buffersSearchCache)
             {
                 var buf = obj as ITypedBuffer;
                 ImGui.BeginChild($"{obj.NativeInstance}", new Vector2(ImGui.GetContentRegionAvail().X, 0),
                     ImGuiChildFlags.AlwaysAutoResize | ImGuiChildFlags.AutoResizeY | ImGuiChildFlags.FrameStyle);
-                ImGui.Text($"{obj.DebugName}({obj.NativeInstance})");
+                ImGui.Text($"{LimitText(obj.DebugName)}({obj.NativeInstance})");
                 ImGui.SameLine();
                 ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X -
                                     ImGui.CalcTextSize($"{buf.Size} bytes").X);
@@ -293,30 +329,58 @@ float4 frag(VertexOut input) : SV_Target
             ImGui.PopStyleVar();
             ImGui.Spacing();
         }
-        ImGui.Separator();
-        if (ImGui.CollapsingHeader("Textures", ImGuiTreeNodeFlags.DefaultOpen))
+        if (ImGui.CollapsingHeader("Textures"))
         {
-            if (Textures.Count == 0)
+            _texturesSearchCache = Textures.Where(b => b.DebugName.Contains(_resourceSearchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (_texturesSearchCache.Count == 0)
             {
                 ImGui.SetCursorPosX((ImGui.GetContentRegionAvail().X - ImGui.CalcTextSize("empty. this is awkward...").X) * 0.5f);
                 ImGui.Text("empty. this is awkward...");
             }
             const int size = 128;
             var columns = (int)Math.Floor(ImGui.GetContentRegionAvail().X / size);
-            var rowCount = (int)Math.Ceiling((float)Textures.Count / columns);
+            var rowCount = (int)Math.Ceiling((float)_texturesSearchCache.Count / columns);
             for (var row = 0; row < rowCount; row++)
             {
                 for (var col = 0; col < columns; col++)
                 {
                     var index = row * columns + col;
-                    if (index >= Textures.Count)
+                    if (index >= _texturesSearchCache.Count)
                         break;
-                    var texture = (RSTexture)Textures[index];
-                    ImGui.Image(texture.ShaderResourceView.NativePointer, new Vector2(size, size));
+                    var texture = (RSTexture)_texturesSearchCache[index];
+                    var drawList = ImGui.GetWindowDrawList();
+                    var imagePos = ImGui.GetCursorScreenPos();
+                    var imageSize = new Vector2(size, size);
+
+                    ImGui.Image(texture.ShaderResourceView.NativePointer, imageSize);
+                    if (ImGui.IsItemHovered())
+                    {
+                        drawList.AddRect(
+                            imagePos,
+                            imagePos + new Vector2(size, size),
+                            ImGui.GetColorU32(new Vector4(1, 0, 0, 1)),
+                            0.0f,
+                            ImDrawFlags.None,
+                            2.0f
+                        );
+                    }
+                    
+                    var label = LimitText(texture.DebugName ?? "<unnamed>", 15);
+                    
+                    var textSize = ImGui.CalcTextSize(label);
+                    var textPos = new Vector2(
+                        imagePos.X + (imageSize.X - textSize.X) * 0.5f,
+                        imagePos.Y + (imageSize.Y - textSize.Y) * 0.5f
+                    );
+
+                    drawList.AddText(textPos + new Vector2(1, 1), ImGui.GetColorU32(new Vector4(0, 0, 0, 1)), label);
+                    drawList.AddText(textPos, ImGui.GetColorU32(new Vector4(1, 1, 1, 1)), label);
+
+
                     ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(0, 2));
                     if (ImGui.BeginItemTooltip())
                     {
-                        ImGui.SeparatorText(texture.DebugName);
+                        ImGui.SeparatorText(texture.DebugName ?? "<unnamed>");
                         ImGui.Image(texture.ShaderResourceView.NativePointer, new(256, 256));
                         ImGui.Text($"{texture.Width}x{texture.Height}   ");
                         ImGui.Text($"Mipmaps: {texture.Settings.HasMipmaps}");
@@ -334,25 +398,28 @@ float4 frag(VertexOut input) : SV_Target
             }
             ImGui.Spacing();
         }
-        ImGui.Separator();
-        if (ImGui.CollapsingHeader("Render Targets", ImGuiTreeNodeFlags.DefaultOpen))
+        if (ImGui.CollapsingHeader("Render Targets"))
         {
-            if (RenderTargets.Count == 0)
+            _renderTargetsSearchCache = RenderTargets.Where(b => b.DebugName.Contains(_resourceSearchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (_renderTargetsSearchCache.Count == 0)
             {
                 ImGui.SetCursorPosX((ImGui.GetContentRegionAvail().X - ImGui.CalcTextSize("empty. this is awkward...").X) * 0.5f);
                 ImGui.Text("empty. this is awkward...");
             }
             const int size = 128;
             var columns = (int)Math.Floor(ImGui.GetContentRegionAvail().X / size);
-            var rowCount = (int)Math.Ceiling((float)RenderTargets.Count / columns);
+            var rowCount = (int)Math.Ceiling((float)_renderTargetsSearchCache.Count / columns);
             for (var row = 0; row < rowCount; row++)
             {
                 for (var col = 0; col < columns; col++)
                 {
                     var index = row * columns + col;
-                    if (index >= RenderTargets.Count)
+                    if (index >= _renderTargetsSearchCache.Count)
                         break;
-                    var texture = (RSRenderTarget)RenderTargets[index];
+                    var texture = (RSRenderTarget)_renderTargetsSearchCache[index];
+                    
+                    var drawList = ImGui.GetWindowDrawList();
+                    var imagePos = ImGui.GetCursorScreenPos();
 
                     if (texture.Type == RenderTargetType.DepthOnly || texture.ColorShaderResourceView == null)
                     {
@@ -370,6 +437,27 @@ float4 frag(VertexOut input) : SV_Target
                     {
                         ImGui.Image(texture.ColorShaderResourceView.NativePointer, new Vector2(size, size));
                     }
+                    if (ImGui.IsItemHovered())
+                    {
+                        drawList.AddRect(
+                            imagePos,
+                            imagePos + new Vector2(size, size),
+                            ImGui.GetColorU32(new Vector4(1, 0, 0, 1)),
+                            0.0f,
+                            ImDrawFlags.None,
+                            2.0f
+                        );
+                    }
+                    var imageSize = new Vector2(size, size);
+                    var label = LimitText(texture.DebugName ?? "<unnamed>", 15);
+                    var textSize = ImGui.CalcTextSize(label);
+                    var textPos = new Vector2(
+                        imagePos.X + (imageSize.X - textSize.X) * 0.5f,
+                        imagePos.Y + (imageSize.Y - textSize.Y) * 0.5f
+                    );
+                    drawList.AddText(textPos + new Vector2(1, 1), ImGui.GetColorU32(new Vector4(0, 0, 0, 1)), label);
+                    drawList.AddText(textPos, ImGui.GetColorU32(new Vector4(1, 1, 1, 1)), label);
+
                     ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(0, 2));
                     if (ImGui.BeginItemTooltip())
                     {
@@ -411,8 +499,6 @@ float4 frag(VertexOut input) : SV_Target
                 ImGui.Spacing();
             }
         }
-
-        ImGui.Spacing();
     }
 
     private static void DrawPerformanceSection()

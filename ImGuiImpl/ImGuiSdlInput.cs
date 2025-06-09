@@ -148,14 +148,14 @@ public static class ImGuiSdlInput
             }
             case SDL.SDL_EventType.SDL_MOUSEWHEEL:
             {
-                float wheel_x = -(float)e.wheel.x;
-                float wheel_y = (float)e.wheel.y;
-                OnScroll?.Invoke(wheel_y);
-                if (!CanScroll) return true;
-                io.AddMouseSourceEvent(e.wheel.which == SDL.SDL_TOUCH_MOUSEID
-                    ? ImGuiMouseSource.TouchScreen
-                    : ImGuiMouseSource.Mouse);
-                io.AddMouseWheelEvent(wheel_x, wheel_y);
+                OnScroll?.Invoke(e.wheel.y);
+                if (CanScroll)
+                {
+                    io.AddMouseSourceEvent(e.wheel.which == SDL.SDL_TOUCH_MOUSEID
+                        ? ImGuiMouseSource.TouchScreen
+                        : ImGuiMouseSource.Mouse);
+                    io.AddMouseWheelEvent(-e.wheel.x, e.wheel.y);
+                }
                 return true;
             }
             case SDL.SDL_EventType.SDL_MOUSEBUTTONDOWN:
@@ -170,7 +170,7 @@ public static class ImGuiSdlInput
                 if (mouse_button == -1)
                     break;
                 io.AddMouseSourceEvent(e.button.which == SDL.SDL_TOUCH_MOUSEID ? ImGuiMouseSource.TouchScreen : ImGuiMouseSource.Mouse);
-                io.AddMouseButtonEvent(mouse_button, (e.type == SDL.SDL_EventType.SDL_MOUSEBUTTONDOWN));
+                io.AddMouseButtonEvent(mouse_button, e.type == SDL.SDL_EventType.SDL_MOUSEBUTTONDOWN);
                 return true;
             }
             case SDL.SDL_EventType.SDL_TEXTINPUT:
@@ -192,7 +192,6 @@ public static class ImGuiSdlInput
                 io.SetKeyEventNativeData(key, (int)e.key.keysym.sym, (int)e.key.keysym.scancode, (int)e.key.keysym.scancode); // To support legacy indexing (<1.87 user code). Legacy backend uses SDLK_*** as indices to IsKeyXXX() functions.
                 return true;
             }
-
         }
 
         return false;

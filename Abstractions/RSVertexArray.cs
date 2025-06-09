@@ -15,16 +15,14 @@ public class RSVertexArray<T> :  IProfilerObject, IDrawableArray, IDisposable wh
         private bool _disposed;
         private readonly RSBuffer<uint>? _indexBuffer;
         private readonly RSBuffer<T>? _vertexBuffer;
-        private readonly ID3D11Device _device;
 
-        public RSVertexArray(ID3D11Device device, ReadOnlySpan<T> vertices, ReadOnlySpan<uint> indices,
+        public RSVertexArray(ReadOnlySpan<T> vertices, ReadOnlySpan<uint> indices,
             string debugName = "VertexArray")
         {
-            _device = device;
             DebugName = debugName;
 
-            _vertexBuffer = new RSBuffer<T>(device, vertices, BindFlags.VertexBuffer, debugName: debugName + "_vertexBuffer");
-            _indexBuffer = new RSBuffer<uint>(device, indices, BindFlags.IndexBuffer, debugName: debugName + "_indexBuffer");
+            _vertexBuffer = new RSBuffer<T>(vertices, BindFlags.VertexBuffer, debugName: debugName + "_vertexBuffer");
+            _indexBuffer = new RSBuffer<uint>(indices, BindFlags.IndexBuffer, debugName: debugName + "_indexBuffer");
             
             RSDebugger.VertexArrays.Add(this);
         }
@@ -40,16 +38,15 @@ public class RSVertexArray<T> :  IProfilerObject, IDrawableArray, IDisposable wh
             }
         }
 
-        public void Bind(D3D11DeviceContainer context)
+        public void Bind()
         {
-            _vertexBuffer?.BindAsVertexBuffer(context);
-            _indexBuffer?.BindAsIndexBuffer(context);
+            _vertexBuffer?.BindAsVertexBuffer();
+            _indexBuffer?.BindAsIndexBuffer();
         }
-        public void DrawIndexed(D3D11DeviceContainer container)
+        public void DrawIndexed()
         {
-            var context = container.Context;
-            Bind(container);
-            context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
-            context.DrawIndexed((uint)_indexBuffer.ItemCount, 0, 0);
+            Bind();
+            D3D11DeviceContainer.SharedState.Context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+            D3D11DeviceContainer.SharedState.Context.DrawIndexed((uint)_indexBuffer.ItemCount, 0, 0);
         }
     }

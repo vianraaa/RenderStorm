@@ -5,5 +5,5 @@ namespace RenderStorm.Abstractions;
 
 public interface IDrawableArray
 {
-    public void DrawIndexed(D3D11DeviceContainer container);
+    public void DrawIndexed();
 }

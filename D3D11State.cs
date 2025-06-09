@@ -19,15 +19,14 @@ public static class D3D11State
     public static RasterizerDescription RasterizerDesc => new()
     {
         FillMode = FillMode.Solid,
-        CullMode = CullFaceEnabled ? CullMode.Back : CullMode.None,
-        FrontCounterClockwise = InvertCulling,
+        CullMode = CullMode.None,
         DepthClipEnable = DepthClipEnable,
         MultisampleEnable = MultiSampleEnable,
         AntialiasedLineEnable = AntialiasedLineEnable,
         DepthBiasClamp = 0.0f,
         DepthBias = 0,
         SlopeScaledDepthBias = 0.0f,
-        ScissorEnable = false,
+        ScissorEnable = true,
     };
     public static DepthStencilDescription DepthStencilDesc => new()
     {
@@ -45,12 +44,14 @@ public static class D3D11State
             e0 = new RenderTargetBlendDescription
             {
                 BlendEnable = AlphaBlendingEnabled,
-                SourceBlend = Blend.SourceAlpha,
+                SourceBlend = Blend.One,
                 DestinationBlend = Blend.InverseSourceAlpha,
                 BlendOperation = BlendOperation.Add,
+
                 SourceBlendAlpha = Blend.One,
-                DestinationBlendAlpha = Blend.Zero,
+                DestinationBlendAlpha = Blend.InverseSourceAlpha,
                 BlendOperationAlpha = BlendOperation.Add,
+
                 RenderTargetWriteMask = ColorWriteEnable.All
             }
         }

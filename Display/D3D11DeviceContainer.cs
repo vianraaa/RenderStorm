@@ -1,4 +1,5 @@
 using System;
+using System.Drawing;
 using System.Numerics;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
@@ -8,6 +9,7 @@ using TracyWrapper;
 
 namespace RenderStorm.Display;
 
+[Obsolete("This class is messy and usage is not recommended unless necessary", false)]
 public class D3D11DeviceContainer : IDisposable
 {
     private ID3D11Device _device;
@@ -20,6 +22,7 @@ public class D3D11DeviceContainer : IDisposable
     public ID3D11RasterizerState RasterizerState;
     public ID3D11DepthStencilState DepthStencilState;
     public ID3D11BlendState BlendState;
+    private Rectangle _scissorRect = Rectangle.Empty;
     
     private IntPtr _windowHandle;
     private Viewport _viewport;
@@ -28,8 +31,22 @@ public class D3D11DeviceContainer : IDisposable
     public ID3D11DeviceContext Context => _context;
     public bool VSync = true;
 
+    public static D3D11DeviceContainer SharedState;
+
+    public void SetScissorRect(Rectangle rect)
+    {
+        Context.RSSetScissorRect((int)rect.X, (int)rect.Y, (int)rect.Width, (int)rect.Height);
+        _scissorRect = rect;
+    }
+    
+    public Rectangle GetScissorRect()
+    {
+        return _scissorRect;
+    }
+
     public D3D11DeviceContainer(IntPtr windowHandle, uint width, uint height)
     {
+        SharedState = this;
         _windowHandle = windowHandle;
         InitializeDeviceAndSwapChain(width, height);
         CreateResources(width, height);

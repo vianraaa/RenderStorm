@@ -16,10 +16,6 @@ public enum RenderTargetType
 
 public class RSRenderTarget : IProfilerObject, IDisposable
 {
-    private readonly RSWindow _window;
-    private readonly ID3D11Device _device;
-    private readonly ID3D11DeviceContext _context;
-
     public uint Width { get; }
     public uint Height { get; }
     public RenderTargetType Type { get; }
@@ -32,12 +28,9 @@ public class RSRenderTarget : IProfilerObject, IDisposable
     public ID3D11DepthStencilView DepthStencilView { get; private set; }
     public ID3D11ShaderResourceView DepthShaderResourceView { get; private set; }
 
-    public RSRenderTarget(RSWindow window, uint width, uint height, string debugName = "RenderTarget", RenderTargetType type = RenderTargetType.ColorAndDepth)
+    public RSRenderTarget(uint width, uint height, string debugName = "RenderTarget", RenderTargetType type = RenderTargetType.ColorAndDepth)
     {
         DebugName = debugName;
-        _window = window;
-        _device = window.D3dDeviceContainer.Device;
-        _context = window.D3dDeviceContainer.Context;
 
         Width = width;
         Height = height;
@@ -63,14 +56,14 @@ public class RSRenderTarget : IProfilerObject, IDisposable
             Usage = ResourceUsage.Default,
             BindFlags = BindFlags.DepthStencil | BindFlags.ShaderResource
         };
-        DepthTexture = _device.CreateTexture2D(depthDesc);
+        DepthTexture = D3D11DeviceContainer.SharedState.Device.CreateTexture2D(depthDesc);
 
         var dsvDesc = new DepthStencilViewDescription
         {
             Format = Format.D32_Float, // Higher precision depth format
             ViewDimension = DepthStencilViewDimension.Texture2D
         };
-        DepthStencilView = _device.CreateDepthStencilView(DepthTexture, dsvDesc);
+        DepthStencilView = D3D11DeviceContainer.SharedState.Device.CreateDepthStencilView(DepthTexture, dsvDesc);
 
         var depthSrvDesc = new ShaderResourceViewDescription
         {
@@ -78,7 +71,7 @@ public class RSRenderTarget : IProfilerObject, IDisposable
             ViewDimension = ShaderResourceViewDimension.Texture2D,
             Texture2D = { MipLevels = 1 }
         };
-        DepthShaderResourceView = _device.CreateShaderResourceView(DepthTexture, depthSrvDesc);
+        DepthShaderResourceView = D3D11DeviceContainer.SharedState.Device.CreateShaderResourceView(DepthTexture, depthSrvDesc);
 
         // Only create color resources for standard render targets
         if (Type == RenderTargetType.ColorAndDepth)
@@ -94,34 +87,31 @@ public class RSRenderTarget : IProfilerObject, IDisposable
                 Usage = ResourceUsage.Default,
                 BindFlags = BindFlags.RenderTarget | BindFlags.ShaderResource
             };
-            ColorTexture = _device.CreateTexture2D(colorDesc);
-            RenderTargetView = _device.CreateRenderTargetView(ColorTexture);
-            ColorShaderResourceView = _device.CreateShaderResourceView(ColorTexture);
+            ColorTexture = D3D11DeviceContainer.SharedState.Device.CreateTexture2D(colorDesc);
+            RenderTargetView = D3D11DeviceContainer.SharedState.Device.CreateRenderTargetView(ColorTexture);
+            ColorShaderResourceView = D3D11DeviceContainer.SharedState.Device.CreateShaderResourceView(ColorTexture);
         }
     }
 
     public void Begin(Color4? clearColor = null)
     {
         // Set viewport for both types
-        _context.RSSetViewport(0, 0, Width, Height);
+        D3D11DeviceContainer.SharedState.Context.RSSetViewport(0, 0, Width, Height);
 
         if (Type == RenderTargetType.ColorAndDepth)
         {
-            // Set both color and depth targets
-            _context.OMSetRenderTargets(RenderTargetView, DepthStencilView);
-
-            // Clear both buffers
-            _context.ClearRenderTargetView(RenderTargetView, clearColor ?? new Color4(0f, 0f, 0f, 1f));
-            _context.ClearDepthStencilView(DepthStencilView,
+            D3D11DeviceContainer.SharedState.Context.OMSetRenderTargets(RenderTargetView, DepthStencilView);
+            D3D11DeviceContainer.SharedState.Context.ClearRenderTargetView(RenderTargetView, clearColor ?? new Color4(0f, 0f, 0f, 1f));
+            D3D11DeviceContainer.SharedState.Context.ClearDepthStencilView(DepthStencilView,
                 DepthStencilClearFlags.Depth | DepthStencilClearFlags.Stencil,
                 1.0f, 0);
         }
         else // DepthOnly
         {
             ID3D11RenderTargetView[] nullRenderTargets = new ID3D11RenderTargetView[1] { null };
-            _context.OMSetRenderTargets(nullRenderTargets, DepthStencilView);
+            D3D11DeviceContainer.SharedState.Context.OMSetRenderTargets(nullRenderTargets, DepthStencilView);
 
-            _context.ClearDepthStencilView(DepthStencilView,
+            D3D11DeviceContainer.SharedState.Context.ClearDepthStencilView(DepthStencilView,
                 DepthStencilClearFlags.Depth,
                 1.0f, 0);
         }
@@ -129,8 +119,8 @@ public class RSRenderTarget : IProfilerObject, IDisposable
 
     public void End()
     {
-        _window.D3dDeviceContainer.SetRenderTargets();
-        _window.D3dDeviceContainer.ApplyRenderStates();
+        D3D11DeviceContainer.SharedState.SetRenderTargets();
+        D3D11DeviceContainer.SharedState.ApplyRenderStates();
     }
 
     public void Dispose()

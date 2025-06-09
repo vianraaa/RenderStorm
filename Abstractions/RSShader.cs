@@ -24,7 +24,7 @@ public class RSShader : IProfilerObject, IDisposable
     protected bool _disposed;
     public ID3D11InputLayout InputLayout => _inputLayout;
     
-    private void CreateInputLayoutFromType(ID3D11Device dev, byte[] shaderBytecode, Type type)
+    private void CreateInputLayoutFromType(byte[] shaderBytecode, Type type)
     {
         using (new TracyWrapper.ProfileScope("Create Input Layout", ZoneC.DARK_SLATE_GRAY))
         {
@@ -73,7 +73,7 @@ public class RSShader : IProfilerObject, IDisposable
             
             if (layoutElements.Count > 0)
             {
-                _inputLayout = dev.CreateInputLayout(layoutElements.ToArray(), shaderBytecode);
+                _inputLayout = D3D11DeviceContainer.SharedState.Device.CreateInputLayout(layoutElements.ToArray(), shaderBytecode);
             }
         }
     }
@@ -93,7 +93,7 @@ public class RSShader : IProfilerObject, IDisposable
         }
     }
 
-    public RSShader(ID3D11Device device, string shaderSource, 
+    public RSShader(string shaderSource, 
         Type vertex, string debugName = "Shader")
     {
         DebugName = debugName;
@@ -105,46 +105,47 @@ public class RSShader : IProfilerObject, IDisposable
         {
             var pixelBytes = File.ReadAllBytes(fragCache);
             var vertexBytes = File.ReadAllBytes(vertexCache);
-            _vertexShader = device.CreateVertexShader(vertexBytes);
-            _pixelShader = device.CreatePixelShader(pixelBytes);
-            CreateInputLayoutFromType(device, vertexBytes, vertex);
+            _vertexShader = D3D11DeviceContainer.SharedState.Device.CreateVertexShader(vertexBytes);
+            _pixelShader = D3D11DeviceContainer.SharedState.Device.CreatePixelShader(pixelBytes);
+            CreateInputLayoutFromType(vertexBytes, vertex);
             RSDebugger.Shaders.Add(this);
             return;
         }
 
-        CompileShaders(device, shaderSource, vertex);
+        CompileShaders(shaderSource, vertex);
         RSDebugger.Shaders.Add(this);
     }
     
-    public RSShader(ID3D11Device device, byte[] vertexBytes, byte[] pixelBytes,
+    public RSShader(byte[] vertexBytes, byte[] pixelBytes,
         Type vertex, string debugName = "Shader")
     {
         DebugName = debugName;
 
-        _vertexShader = device.CreateVertexShader(vertexBytes);
-        _pixelShader = device.CreatePixelShader(pixelBytes);
+        _vertexShader = D3D11DeviceContainer.SharedState.Device.CreateVertexShader(vertexBytes);
+        _pixelShader = D3D11DeviceContainer.SharedState.Device.CreatePixelShader(pixelBytes);
 
-        CreateInputLayoutFromType(device, vertexBytes, vertex);
+        CreateInputLayoutFromType(vertexBytes, vertex);
         RSDebugger.Shaders.Add(this);
     }
 
-    public void SetResource(D3D11DeviceContainer container, uint register, ID3D11ShaderResourceView view)
+    public void SetResource(uint register, ID3D11ShaderResourceView view)
     {
-        container.Context.PSSetShaderResource(register, view);
+        D3D11DeviceContainer.SharedState.Context.PSSetShaderResource(register, view);
     }
-    public void SetSampler(D3D11DeviceContainer container, uint register, ID3D11SamplerState sampler)
+    public void SetSampler(uint register, ID3D11SamplerState sampler)
     {
-        container.Context.PSSetSampler(register, sampler);
-    }
-
-    public void SetTexture(D3D11DeviceContainer container, uint register, RSTexture texture)
-    {
-        container.Context.PSSetShaderResource(register, texture.ShaderResourceView);
-        container.Context.PSSetSampler(register, texture.SamplerState);
+        D3D11DeviceContainer.SharedState.Context.PSSetSampler(register, sampler);
     }
 
-    protected void CompileShaders(ID3D11Device dev, string shaderSource, Type vertex)
+    public void SetTexture(uint register, RSTexture texture)
     {
+        D3D11DeviceContainer.SharedState.Context.PSSetShaderResource(register, texture.ShaderResourceView);
+        D3D11DeviceContainer.SharedState.Context.PSSetSampler(register, texture.SamplerState);
+    }
+
+    protected void CompileShaders(string shaderSource, Type vertex)
+    {
+        var dev = D3D11DeviceContainer.SharedState.Device;
         using (new TracyWrapper.ProfileScope("Compile Shaders", ZoneC.DARK_SLATE_BLUE))
         {
             byte[] vertexShaderBytecode = CompileShader(shaderSource, "vs_5_0", "vert");
@@ -159,7 +160,7 @@ public class RSShader : IProfilerObject, IDisposable
 
             _vertexShader = dev.CreateVertexShader(vertexShaderBytecode);
             _pixelShader = dev.CreatePixelShader(pixelShaderBytecode);
-            CreateInputLayoutFromType(dev, vertexShaderBytecode, vertex);
+            CreateInputLayoutFromType(vertexShaderBytecode, vertex);
         }
     }
     /// "vs_5_0" : "ps_5_0"
@@ -176,11 +177,11 @@ public class RSShader : IProfilerObject, IDisposable
         }
     }
 
-    public unsafe void SetCBuffer<TUniform>(D3D11DeviceContainer container, uint slot, TUniform value)
+    public unsafe void SetCBuffer<TUniform>(uint slot, TUniform value)
     {
         using (new TracyWrapper.ProfileScope("Set Constant Buffer", ZoneC.DARK_ORANGE))
         {
-            var context = container.Context;
+            var context = D3D11DeviceContainer.SharedState.Context;
             if (_disposed)
                 throw new ObjectDisposedException(nameof(RSShader));
             
@@ -194,7 +195,7 @@ public class RSShader : IProfilerObject, IDisposable
                     CPUAccessFlags = CpuAccessFlags.Write
                 };
                 
-                buffer = container.Device.CreateBuffer(bufferDesc);
+                buffer = D3D11DeviceContainer.SharedState.Device.CreateBuffer(bufferDesc);
                 buffer.DebugName = $"{DebugName}_CB_Register{slot}";
                 _constantBuffers[slot] = buffer;
             }
@@ -214,13 +215,13 @@ public class RSShader : IProfilerObject, IDisposable
         }
     }
 
-    public void Use(D3D11DeviceContainer context)
+    public void Use()
     {
         using (new TracyWrapper.ProfileScope("Use Shader", ZoneC.DARK_ORANGE))
         {
-            context.Context.IASetInputLayout(_inputLayout);
-            context.Context.VSSetShader(_vertexShader);
-            context.Context.PSSetShader(_pixelShader);
+            D3D11DeviceContainer.SharedState.Context.IASetInputLayout(_inputLayout);
+            D3D11DeviceContainer.SharedState.Context.VSSetShader(_vertexShader);
+            D3D11DeviceContainer.SharedState.Context.PSSetShader(_pixelShader);
         }
     }
 
@@ -245,11 +246,11 @@ public class RSShader : IProfilerObject, IDisposable
 
 public class RSShader<T> : RSShader where T : unmanaged
 {
-    public RSShader(ID3D11Device device, string shaderSource,
-        string debugName = "Shader") : base(device, shaderSource, typeof(T), debugName) { }
+    public RSShader(string shaderSource,
+        string debugName = "Shader") : base(shaderSource, typeof(T), debugName) { }
     
-    public RSShader(ID3D11Device device, byte[] vertexBytes, byte[] pixelBytes,
-        string debugName = "Shader") : base(device, vertexBytes, pixelBytes, typeof(T), debugName) { }
+    public RSShader(byte[] vertexBytes, byte[] pixelBytes,
+        string debugName = "Shader") : base(vertexBytes, pixelBytes, typeof(T), debugName) { }
 }
 
 [AttributeUsage(AttributeTargets.Field)]

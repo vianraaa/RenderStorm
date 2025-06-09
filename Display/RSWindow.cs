@@ -1,5 +1,6 @@
 ﻿using System.Drawing;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using System.Text;
 using RenderStorm.Other;
 using RenderStormImpl;
@@ -13,6 +14,7 @@ namespace RenderStorm.Display
         public static RSWindow Instance;
         private string _title = "Game";
         public IntPtr Native;
+        public IntPtr hWnd;
         public Action ViewBegin;
         public Action ViewEnd;
         public Action<double> ViewUpdate;
@@ -28,7 +30,7 @@ namespace RenderStorm.Display
 #endif
 
         private string _cachePath;
-        public readonly D3D11DeviceContainer D3dDeviceContainer;
+        internal readonly D3D11DeviceContainer D3dDeviceContainer;
 
         public string CachePath
         {
@@ -39,7 +41,6 @@ namespace RenderStorm.Display
                 Directory.CreateDirectory(Path.GetFullPath(_cachePath));
             }
         }
-
         public RSWindow(string title = "Game", int width = 1024, int height = 600, string cachePath = ".renderstorm")
         {
             TracyWrapper.Profiler.InitThread();
@@ -63,11 +64,15 @@ namespace RenderStorm.Display
 
                 SDL.SDL_SysWMinfo info = new SDL.SDL_SysWMinfo();
                 SDL.SDL_GetWindowWMInfo(Native, ref info);
-                SDL.SDL_Vulkan_GetDrawableSize(Native, out int w, out var h); 
+                SDL.SDL_Vulkan_GetDrawableSize(Native, out int w, out var h);
+                hWnd = info.info.win.window;
                 D3dDeviceContainer = new D3D11DeviceContainer(info.info.win.window, (uint)w, (uint)h);
                 CleanInfo = D3dDeviceContainer.GetGroupedInfo();
                 IntPtr ctx = ImGui.CreateContext();
                 ImGui.SetCurrentContext(ctx);
+                var io = ImGui.GetIO();
+                io.ConfigFlags |= ImGuiConfigFlags.DockingEnable;
+
                 /*ImGuiNative.igStyleSpectrum();*/
                 ImGuiNative.igSetIODisplaySize(w, h);
                 ImGuiNative.igSetIOFramebufferScale(1, 1);
@@ -147,13 +152,14 @@ namespace RenderStorm.Display
                 lastFrameTime = currentTime;
                 D3dDeviceContainer.ApplyRenderStates();
                 D3dDeviceContainer.SetRenderTargets();
+                D3dDeviceContainer.SetScissorRect(new(0, 0, width, height));
                 D3dDeviceContainer.Clear(0f, 0f, 0f, 1.0f);
                 ViewUpdate?.Invoke(deltaTime);
                 RSDebugger.DeltaTime = deltaTime;
                 RSDebugger.TimeElapsed += deltaTime;
 
                 if (DebuggerOpen)
-                    RSDebugger.DrawDebugger(D3dDeviceContainer);
+                    RSDebugger.DrawDebugger();
 
                 if(DebugString)
                     RSDebugger.DrawDebugText($"{RSDebugger.RSVERSION}\n" +

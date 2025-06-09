@@ -68,7 +68,7 @@ public sealed class RSTexture : IProfilerObject, IDisposable
     
     public uint Width { get; }
     public uint Height { get; }
-    public uint MipLevels { get; }
+    public uint MipLevels { get; private set; } // Changed to private set
     public Format Format { get; }
     public TextureCreationSettings Settings { get; }
     public string DebugName { get; }
@@ -83,18 +83,14 @@ public sealed class RSTexture : IProfilerObject, IDisposable
     /// <summary>
     /// Creates a new texture with optional initial data
     /// </summary>
-    /// <param name="device">D3D11 device</param>
     /// <param name="width">Texture width</param>
     /// <param name="height">Texture height</param>
     /// <param name="pixelData">Optional initial pixel data</param>
     /// <param name="settings">Texture creation settings</param>
     /// <param name="debugName">Debug name for the resource</param>
-    public RSTexture(ID3D11Device device, uint width, uint height, byte[] pixelData = null, 
+    public RSTexture(uint width, uint height, byte[] pixelData = null, 
                     TextureCreationSettings? settings = null, string debugName = "RSTexture")
     {
-        if (device == null)
-            throw new ArgumentNullException(nameof(device));
-        
         if (width == 0 || height == 0)
             throw new ArgumentException("Texture dimensions must be greater than zero");
             
@@ -104,11 +100,9 @@ public sealed class RSTexture : IProfilerObject, IDisposable
         Format = Settings.Format;
         DebugName = debugName;
         
-        MipLevels = Settings.HasMipmaps ? CalculateMipLevels(width, height) : 1;
-        
-        CreateTexture(device, pixelData);
-        CreateViews(device);
-        CreateSamplerState(device);
+        CreateTexture(pixelData);
+        CreateViews();
+        CreateSamplerState();
         
         RSDebugger.Textures.Add(this);
     }
@@ -116,12 +110,9 @@ public sealed class RSTexture : IProfilerObject, IDisposable
     /// <summary>
     /// Creates a texture from an existing ID3D11Texture2D
     /// </summary>
-    public RSTexture(ID3D11Device device, ID3D11Texture2D existingTexture, 
+    public RSTexture(ID3D11Texture2D existingTexture, 
                     TextureCreationSettings? settings = null, string debugName = "RSTexture")
     {
-        if (device == null)
-            throw new ArgumentNullException(nameof(device));
-        
         if (existingTexture == null)
             throw new ArgumentNullException(nameof(existingTexture));
             
@@ -135,30 +126,30 @@ public sealed class RSTexture : IProfilerObject, IDisposable
         Format = desc.Format;
         MipLevels = desc.MipLevels;
         
-        CreateViews(device);
-        CreateSamplerState(device);
+        CreateViews();
+        CreateSamplerState();
         
         RSDebugger.Textures.Add(this);
     }
     
-    private void CreateTexture(ID3D11Device device, byte[] pixelData)
+    private void CreateTexture(byte[] pixelData)
     {
         var usage = Settings.IsDynamic ? ResourceUsage.Dynamic : ResourceUsage.Default;
-        
+
         var bindFlags = BindFlags.ShaderResource;
         if (Settings.HasMipmaps)
             bindFlags |= BindFlags.RenderTarget;
         if (Settings.EnableUnorderedAccess)
             bindFlags |= BindFlags.UnorderedAccess;
-        
+
         var cpuAccessFlags = Settings.IsDynamic ? CpuAccessFlags.Write : CpuAccessFlags.None;
         var miscFlags = Settings.HasMipmaps ? ResourceOptionFlags.GenerateMips : ResourceOptionFlags.None;
-        
+
         var textureDesc = new Texture2DDescription
         {
             Width = Width,
             Height = Height,
-            MipLevels = MipLevels,
+            MipLevels = Settings.HasMipmaps ? 0u : 1u,
             ArraySize = 1,
             Format = Format,
             SampleDescription = new SampleDescription(1, 0),
@@ -167,16 +158,56 @@ public sealed class RSTexture : IProfilerObject, IDisposable
             CPUAccessFlags = cpuAccessFlags,
             MiscFlags = miscFlags
         };
-        
+
         if (pixelData != null)
         {
+            // Validate pixel data size
+            uint expectedSize = Width * Height * BytesPerPixel;
+            if (pixelData.Length != expectedSize)
+            {
+                throw new ArgumentException($"Pixel data size ({pixelData.Length}) does not match expected size ({expectedSize}) for {Width}x{Height} texture");
+            }
+
             uint rowPitch = Width * BytesPerPixel;
-            
+            uint slicePitch = Height * rowPitch;
+
             var handle = GCHandle.Alloc(pixelData, GCHandleType.Pinned);
             try
             {
-                var dataBox = new SubresourceData(handle.AddrOfPinnedObject(), rowPitch);
-                Texture = device.CreateTexture2D(textureDesc, new[] { dataBox });
+                var dataBox = new SubresourceData(handle.AddrOfPinnedObject(), rowPitch, slicePitch);
+                
+                if (Settings.HasMipmaps)
+                {
+                    Texture = D3D11DeviceContainer.SharedState.Device.CreateTexture2D(textureDesc);
+                    
+                    var stagingDesc = new Texture2DDescription
+                    {
+                        Width = Width,
+                        Height = Height,
+                        MipLevels = 1,
+                        ArraySize = 1,
+                        Format = Format,
+                        SampleDescription = new SampleDescription(1, 0),
+                        Usage = ResourceUsage.Staging,
+                        BindFlags = BindFlags.None,
+                        CPUAccessFlags = CpuAccessFlags.Write,
+                        MiscFlags = ResourceOptionFlags.None
+                    };
+    
+                    using var stagingTexture = D3D11DeviceContainer.SharedState.Device.CreateTexture2D(stagingDesc, new[] { dataBox });
+                    
+                    D3D11DeviceContainer.SharedState.Context.CopySubresourceRegion(
+                        Texture, 
+                        0,
+                        0,
+                        0, 
+                        0,
+                        stagingTexture, 0);
+                }
+                else
+                {
+                    Texture = D3D11DeviceContainer.SharedState.Device.CreateTexture2D(textureDesc, new[] { dataBox });
+                }
             }
             finally
             {
@@ -185,11 +216,14 @@ public sealed class RSTexture : IProfilerObject, IDisposable
         }
         else
         {
-            Texture = device.CreateTexture2D(textureDesc);
+            Texture = D3D11DeviceContainer.SharedState.Device.CreateTexture2D(textureDesc);
         }
+        
+        var actualDesc = Texture.Description;
+        MipLevels = actualDesc.MipLevels;
     }
-    
-    private void CreateViews(ID3D11Device device)
+
+    private void CreateViews()
     {
         var srvDesc = new ShaderResourceViewDescription
         {
@@ -197,12 +231,12 @@ public sealed class RSTexture : IProfilerObject, IDisposable
             ViewDimension = ShaderResourceViewDimension.Texture2D,
             Texture2D = new Texture2DShaderResourceView
             {
-                MipLevels = MipLevels,
+                MipLevels = unchecked((uint)-1), // Use all available mip levels
                 MostDetailedMip = 0
             }
         };
         
-        ShaderResourceView = device.CreateShaderResourceView(Texture, srvDesc);
+        ShaderResourceView = D3D11DeviceContainer.SharedState.Device.CreateShaderResourceView(Texture, srvDesc);
         
         if (Settings.EnableUnorderedAccess)
         {
@@ -216,18 +250,43 @@ public sealed class RSTexture : IProfilerObject, IDisposable
                 }
             };
             
-            UnorderedAccessView = device.CreateUnorderedAccessView(Texture, uavDesc);
+            UnorderedAccessView = D3D11DeviceContainer.SharedState.Device.CreateUnorderedAccessView(Texture, uavDesc);
         }
         
+        // Generate mips AFTER creating the SRV and ONLY if we have mipmaps enabled and more than 1 mip level
         if (Settings.HasMipmaps && MipLevels > 1)
         {
-            using var context = device.ImmediateContext;
-            context.GenerateMips(ShaderResourceView);
+            // Verify the format supports mip generation
+            if (!IsFormatSupportedForMipGeneration(Format))
+            {
+                throw new InvalidOperationException($"Format {Format} does not support automatic mip generation");
+            }
+            
+            // Make sure we have valid data in mip 0 before generating
+            D3D11DeviceContainer.SharedState.Context.GenerateMips(ShaderResourceView);
         }
     }
     
+    // Helper method to check format support for mip generation
+    private static bool IsFormatSupportedForMipGeneration(Format format)
+    {
+        // Common formats that support mip generation
+        return format switch
+        {
+            Format.R8G8B8A8_UNorm or
+            Format.R8G8B8A8_UNorm_SRgb or
+            Format.B8G8R8A8_UNorm or
+            Format.B8G8R8A8_UNorm_SRgb or
+            Format.R16G16B16A16_Float or
+            Format.R32G32B32A32_Float or
+            Format.R8_UNorm or
+            Format.R16_Float or
+            Format.R32_Float => true,
+            _ => false
+        };
+    }
 
-    private void CreateSamplerState(ID3D11Device device)
+    private void CreateSamplerState()
     {
         Filter filter;
         switch (Settings.Filtering)
@@ -235,7 +294,7 @@ public sealed class RSTexture : IProfilerObject, IDisposable
             case TextureFiltering.Nearest:
                 filter = Settings.HasMipmaps 
                     ? Filter.MinMagMipPoint
-                    : Filter.MinMagMipLinear;
+                    : Filter.MinMagLinearMipPoint; // Fixed: was MinMagMipLinear
                 break;
                 
             case TextureFiltering.Anisotropic:
@@ -269,10 +328,10 @@ public sealed class RSTexture : IProfilerObject, IDisposable
             ComparisonFunc = ComparisonFunction.Never,
             BorderColor = new(Settings.BorderColor.X, Settings.BorderColor.Y, Settings.BorderColor.Z, Settings.BorderColor.W),
             MinLOD = 0,
-            MaxLOD = float.MaxValue
+            MaxLOD = Settings.HasMipmaps ? float.MaxValue : 0.0f // Limit MaxLOD when no mipmaps
         };
         
-        SamplerState = device.CreateSamplerState(samplerDesc);
+        SamplerState = D3D11DeviceContainer.SharedState.Device.CreateSamplerState(samplerDesc);
     }
     
     private static uint CalculateMipLevels(uint width, uint height)
@@ -281,66 +340,28 @@ public sealed class RSTexture : IProfilerObject, IDisposable
     }
     
     /// <summary>
-    /// Updates texture data for dynamic textures
-    /// </summary>
-    public void UpdateData(ID3D11DeviceContext context, byte[] data)
-    {
-        if (context == null)
-            throw new ArgumentNullException(nameof(context));
-            
-        if (data == null)
-            throw new ArgumentNullException(nameof(data));
-            
-        if (!Settings.IsDynamic)
-            throw new InvalidOperationException("Cannot update a non-dynamic texture");
-        
-        var mappedResource = context.Map(Texture, 0, MapMode.WriteDiscard, Vortice.Direct3D11.MapFlags.None);
-        try
-        {
-            Marshal.Copy(data, 0, mappedResource.DataPointer, data.Length);
-        }
-        finally
-        {
-            context.Unmap(Texture, 0);
-        }
-        
-        if (Settings.HasMipmaps && MipLevels > 1)
-        {
-            context.GenerateMips(ShaderResourceView);
-        }
-    }
-    
-    /// <summary>
     /// Binds the texture to the compute shader
     /// </summary>
-    public void BindToComputeShader(ID3D11DeviceContext context, uint slot)
+    public void BindToComputeShader(uint slot)
     {
-        if (context == null)
-            throw new ArgumentNullException(nameof(context));
-            
-        context.CSSetShaderResource(slot, ShaderResourceView);
-        context.CSSetSampler(slot, SamplerState);
+        D3D11DeviceContainer.SharedState.Context.CSSetShaderResource(slot, ShaderResourceView);
+        D3D11DeviceContainer.SharedState.Context.CSSetSampler(slot, SamplerState);
     }
     
     /// <summary>
     /// Binds the texture UAV to a compute shader
     /// </summary>
-    public void BindUAVToComputeShader(ID3D11DeviceContext context, uint slot)
+    public void BindUAVToComputeShader(uint slot)
     {
-        if (context == null)
-            throw new ArgumentNullException(nameof(context));
-            
         if (UnorderedAccessView == null)
             throw new InvalidOperationException("This texture does not have a UAV");
             
-        context.CSSetUnorderedAccessView(slot, UnorderedAccessView);
+        D3D11DeviceContainer.SharedState.Context.CSSetUnorderedAccessView(slot, UnorderedAccessView);
     }
     
     /// <summary>
     /// Creates a new texture containing a specified rectangular region of this texture
     /// </summary>
-    /// <param name="device">D3D11 device</param>
-    /// <param name="context">D3D11 device context</param>
     /// <param name="x">X coordinate of the top-left corner</param>
     /// <param name="y">Y coordinate of the top-left corner</param>
     /// <param name="width">Width of the region</param>
@@ -348,18 +369,12 @@ public sealed class RSTexture : IProfilerObject, IDisposable
     /// <param name="settings">Optional texture creation settings for the new texture</param>
     /// <param name="debugName">Debug name for the new texture</param>
     /// <returns>A new RSTexture containing the specified region</returns>
-    public RSTexture GetSubrect(D3D11DeviceContainer container, 
-                              uint x, uint y, uint width, uint height,
+    public RSTexture GetSubrect(uint x, uint y, uint width, uint height,
                               TextureCreationSettings? settings = null, 
                               string debugName = null)
     {
-        ID3D11Device device = container.Device;
-        ID3D11DeviceContext context = container.Context;
-        if (device == null)
-            throw new ArgumentNullException(nameof(device));
-            
-        if (context == null)
-            throw new ArgumentNullException(nameof(context));
+        ID3D11Device device = D3D11DeviceContainer.SharedState.Device;
+        ID3D11DeviceContext context = D3D11DeviceContainer.SharedState.Context;
             
         // Validate parameters
         if (x + width > Width)
@@ -388,25 +403,19 @@ public sealed class RSTexture : IProfilerObject, IDisposable
         
         using var stagingTexture = device.CreateTexture2D(stagingDesc);
         
-        // Copy source texture to staging texture
         context.CopyResource(Texture, stagingTexture);
         
-        // Map the staging texture to read pixel data
         var mappedResource = context.Map(stagingTexture, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.None);
         try
         {
-            // Calculate sizes
             uint srcRowPitch = mappedResource.RowPitch;
             uint newRowPitch = width * BytesPerPixel;
             byte[] subPixelData = new byte[width * height * BytesPerPixel];
             
-            // Create pointer to the first pixel of the source region
             IntPtr srcPtr = IntPtr.Add(mappedResource.DataPointer, (int)(y * srcRowPitch + x * BytesPerPixel));
             
-            // Extract the region row by row
             for (uint row = 0; row < height; row++)
             {
-                // Copy one row of pixels
                 Marshal.Copy(
                     IntPtr.Add(srcPtr, (int)(row * srcRowPitch)), 
                     subPixelData, 
@@ -414,13 +423,11 @@ public sealed class RSTexture : IProfilerObject, IDisposable
                     (int)newRowPitch);
             }
             
-            // Create the new texture with the extracted data
             return new RSTexture(
-                device, 
                 width, 
                 height, 
                 subPixelData,
-                settings ?? Settings, // Use original settings by default 
+                settings ?? Settings,
                 debugName ?? $"{DebugName}_Subrect");
         }
         finally

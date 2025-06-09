@@ -20,16 +20,14 @@ public class RSBuffer<T> : IProfilerObject, ITypedBuffer, IDisposable where T : 
 {
     private bool _disposed;
     private ID3D11Buffer _buffer;
-    private readonly ID3D11Device _device;
     private readonly ResourceUsage _usage;
     private readonly CpuAccessFlags _cpuAccessFlags;
 
-    public unsafe RSBuffer(ID3D11Device device, ReadOnlySpan<T> data, BindFlags bindFlags, 
+    public unsafe RSBuffer(ReadOnlySpan<T> data, BindFlags bindFlags, 
         ResourceUsage usage = ResourceUsage.Default, CpuAccessFlags cpuAccessFlags = CpuAccessFlags.None, 
         string debugName = "Buffer")
     {
         RSDebugger.Buffers.Add(this);
-        _device = device;
         DebugName = debugName;
         BindFlags = bindFlags;
         _usage = usage;
@@ -54,7 +52,7 @@ public class RSBuffer<T> : IProfilerObject, ITypedBuffer, IDisposable where T : 
                 DataPointer = (IntPtr)dataPtr
             };
             
-            device.CreateBuffer(bufferDesc, initialData, out _buffer);
+            D3D11DeviceContainer.SharedState.Device.CreateBuffer(bufferDesc, initialData, out _buffer);
         }
         
         if (!string.IsNullOrEmpty(debugName))
@@ -79,21 +77,19 @@ public class RSBuffer<T> : IProfilerObject, ITypedBuffer, IDisposable where T : 
         GC.SuppressFinalize(this);
     }
 
-    public void BindAsVertexBuffer(D3D11DeviceContainer container, uint slot = 0, uint offsetInBytes = 0)
+    public void BindAsVertexBuffer(uint slot = 0, uint offsetInBytes = 0)
     {
-        var context = container.Context;
         if (_disposed)
             throw new ObjectDisposedException(nameof(RSBuffer<T>));
             
         if (!BindFlags.HasFlag(BindFlags.VertexBuffer))
             throw new InvalidOperationException("Buffer was not created with VertexBuffer bind flag");
             
-        context.IASetVertexBuffer(slot, _buffer, (uint)Marshal.SizeOf<T>(), offsetInBytes);
+        D3D11DeviceContainer.SharedState.Context.IASetVertexBuffer(slot, _buffer, (uint)Marshal.SizeOf<T>(), offsetInBytes);
     }
 
-    public void BindAsIndexBuffer(D3D11DeviceContainer container, Format format = Format.R32_UInt, uint offsetInBytes = 0)
+    public void BindAsIndexBuffer(Format format = Format.R32_UInt, uint offsetInBytes = 0)
     {
-        var context = container.Context;
         if (_disposed)
             throw new ObjectDisposedException(nameof(RSBuffer<T>));
             
@@ -109,12 +105,11 @@ public class RSBuffer<T> : IProfilerObject, ITypedBuffer, IDisposable where T : 
         if (format == Format.R32_UInt && Marshal.SizeOf<T>() != 4)
             throw new InvalidOperationException("R32_UInt format requires a 32-bit index type");
             
-        context.IASetIndexBuffer(_buffer, format, offsetInBytes);
+        D3D11DeviceContainer.SharedState.Context.IASetIndexBuffer(_buffer, format, offsetInBytes);
     }
 
-    public void BindAsConstantBuffer(D3D11DeviceContainer container, ShaderStages shaderStage, uint slot)
+    public void BindAsConstantBuffer(ShaderStages shaderStage, uint slot)
     {
-        var context = container.Context;
         ID3D11Buffer[] buffers = [_buffer];
         if (_disposed)
             throw new ObjectDisposedException(nameof(RSBuffer<T>));
@@ -123,22 +118,22 @@ public class RSBuffer<T> : IProfilerObject, ITypedBuffer, IDisposable where T : 
             throw new InvalidOperationException("Buffer was not created with ConstantBuffer bind flag");
             
         if ((shaderStage & ShaderStages.Vertex) != 0)
-            context.VSSetConstantBuffers(slot, buffers);
+            D3D11DeviceContainer.SharedState.Context.VSSetConstantBuffers(slot, buffers);
             
         if ((shaderStage & ShaderStages.Pixel) != 0)
-            context.PSSetConstantBuffers(slot, buffers);
+            D3D11DeviceContainer.SharedState.Context.PSSetConstantBuffers(slot, buffers);
             
         if ((shaderStage & ShaderStages.Geometry) != 0)
-            context.GSSetConstantBuffers(slot, buffers);
+            D3D11DeviceContainer.SharedState.Context.GSSetConstantBuffers(slot, buffers);
             
         if ((shaderStage & ShaderStages.Hull) != 0)
-            context.HSSetConstantBuffers(slot, buffers);
+            D3D11DeviceContainer.SharedState.Context.HSSetConstantBuffers(slot, buffers);
             
         if ((shaderStage & ShaderStages.Domain) != 0)
-            context.DSSetConstantBuffers(slot, buffers);
+            D3D11DeviceContainer.SharedState.Context.DSSetConstantBuffers(slot, buffers);
             
         if ((shaderStage & ShaderStages.Compute) != 0)
-            context.CSSetConstantBuffers(slot, buffers);
+            D3D11DeviceContainer.SharedState.Context.CSSetConstantBuffers(slot, buffers);
     }
     public ID3D11Buffer NativeBuffer => _disposed ? throw new ObjectDisposedException(nameof(RSBuffer<T>)) : _buffer;
 }

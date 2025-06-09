@@ -14,4 +14,6 @@ public static unsafe class ImGuiDx11Impl
     public static extern void ImGui_ImplDX11_NewFrame();
     [DllImport("cimgui.dll")]
     public static extern void ImGui_ImplDX11_RenderDrawData( ImDrawData* draw_data );
+    [DllImport("cimgui.dll")]
+    public static extern void ImGui_ImplDX11_CreateDeviceObjects();
 }
