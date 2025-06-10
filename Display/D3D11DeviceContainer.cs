@@ -79,8 +79,7 @@ public class D3D11DeviceContainer : IDisposable
             {
                 Width = width,
                 Height = height,
-                Format = Format.R8G8B8A8_UNorm,
-                RefreshRate = new Rational(60, 1)
+                Format = Format.R8G8B8A8_UNorm
             },
             BufferUsage = Usage.RenderTargetOutput,
             OutputWindow = _windowHandle,
@@ -90,17 +89,20 @@ public class D3D11DeviceContainer : IDisposable
             Flags = SwapChainFlags.None
         };
 
-        D3D11.D3D11CreateDeviceAndSwapChain(
+        var result = D3D11.D3D11CreateDeviceAndSwapChain(
             null,
             DriverType.Hardware,
-            DeviceCreationFlags.Debug,
+            DeviceCreationFlags.None,
             new[] { FeatureLevel.Level_11_0 },
             swapChainDesc,
             out _swapChain,
             out _device,
-            out _,
+            out var featureLevel,
             out _context
         );
+        if (result.Failure)
+            throw new Exception(result.Description);
+        Console.WriteLine($"[rs] featurelvl: {Enum.GetName(featureLevel ?? FeatureLevel.Level_11_0)}");
     }
 
     private void CreateResources(uint width, uint height)
