@@ -165,11 +165,15 @@ namespace RenderStorm.Display
                     RSDebugger.DrawDebugText($"{RSDebugger.RSVERSION}\n" +
                                              $"{CleanInfo} DirectX 11\n" +
                                              $"{(int)(1.0f / deltaTime)}fps");
+                
+                Profiler.PushProfileZone("ImGui Render", Color.DarkRed);
                 ImGui.Render();
                 unsafe
                 {
                     ImGuiDx11Impl.ImGui_ImplDX11_RenderDrawData(ImGui.GetDrawData());
                 }
+                Profiler.PopProfileZone();
+                
                 D3dDeviceContainer.Present();
             }
             PrePostTextDraw("Shutting down...");
