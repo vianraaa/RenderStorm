@@ -78,7 +78,7 @@ namespace RenderStorm.Display
                 ImGuiNative.igSetIOFramebufferScale(1, 1);
 
                 ImGuiSdl2Impl.ImGui_ImplSDL2_InitForD3D(ImGuiSdl2Impl.GetSDLWindow());
-                ImGuiDx11Impl.ImGui_ImplDX11_Init(D3dDeviceContainer.Device.NativePointer, D3dDeviceContainer.Context.NativePointer);
+                ImGuiDx11Impl.Init(D3dDeviceContainer.Device.NativePointer, D3dDeviceContainer.Context.NativePointer);
                 PrePostTextDraw("Preloading...");
             }
         }
@@ -141,7 +141,7 @@ namespace RenderStorm.Display
                             break;
                     }
                 }
-                ImGuiDx11Impl.ImGui_ImplDX11_NewFrame();
+                ImGuiDx11Impl.NewFrame();
                 ImGuiSdl2Impl.ImGui_ImplSDL2_NewFrame();
                 ImGuiNative.igSetIODisplaySize(width, height);
                 ImGuiNative.igSetIOFramebufferScale(1, 1);
@@ -164,13 +164,13 @@ namespace RenderStorm.Display
                 if(DebugString)
                     RSDebugger.DrawDebugText($"{RSDebugger.RSVERSION}\n" +
                                              $"{CleanInfo} DirectX 11\n" +
-                                             $"{(int)(1.0f / deltaTime)}fps");
+                                             $"{(int)(1.0f / deltaTime)}fps", true, new(GetSize().X/2, 0));
                 
                 Profiler.PushProfileZone("ImGui Render", Color.DarkRed);
                 ImGui.Render();
                 unsafe
                 {
-                    ImGuiDx11Impl.ImGui_ImplDX11_RenderDrawData(ImGui.GetDrawData());
+                    ImGuiDx11Impl.RenderDrawData(ImGui.GetDrawData());
                 }
                 Profiler.PopProfileZone();
                 
@@ -182,7 +182,7 @@ namespace RenderStorm.Display
 
         private void PrePostTextDraw(string str)
         {
-            ImGuiDx11Impl.ImGui_ImplDX11_NewFrame();
+            ImGuiDx11Impl.NewFrame();
             ImGuiSdl2Impl.ImGui_ImplSDL2_NewFrame();
             SDL.SDL_GetWindowSize(Native, out var wwidth, out var hheight);
             ImGuiNative.igSetIODisplaySize(wwidth, hheight);
@@ -193,12 +193,12 @@ namespace RenderStorm.Display
             D3dDeviceContainer.Clear(0f, 0f, 0f, 1.0f);
             RSDebugger.DrawDebugRect(new Vector2(wwidth, hheight) / 2 - ImGui.CalcTextSize(str) / 2.0f -
                                      (new Vector2(25) / 2.0f), ImGui.CalcTextSize(str) + new Vector2(25), Color.FromArgb(15, 15 ,25));
-            RSDebugger.DrawDebugText(str, new Vector2(wwidth, hheight) / 2 - ImGui.CalcTextSize(str) / 2.0f);
+            RSDebugger.DrawDebugText(str, position: new Vector2(wwidth, hheight) / 2 - ImGui.CalcTextSize(str) / 2.0f);
 
             ImGui.Render();
             unsafe
             {
-                ImGuiDx11Impl.ImGui_ImplDX11_RenderDrawData(ImGui.GetDrawData());
+                ImGuiDx11Impl.RenderDrawData(ImGui.GetDrawData());
             }
             D3dDeviceContainer.Present();
         }
@@ -209,7 +209,7 @@ namespace RenderStorm.Display
             {
                 ViewBegin?.Invoke();
                 ImGuiSdl2Impl.ImGui_ImplSDL2_NewFrame();
-                ImGuiDx11Impl.ImGui_ImplDX11_NewFrame();
+                ImGuiDx11Impl.NewFrame();
                 ImGui.NewFrame();
             }
         }
@@ -221,7 +221,7 @@ namespace RenderStorm.Display
                 unsafe
                 {
                     ImGui.Render();
-                    ImGuiDx11Impl.ImGui_ImplDX11_RenderDrawData(ImGui.GetDrawData());
+                    ImGuiDx11Impl.RenderDrawData(ImGui.GetDrawData());
                     ViewEnd?.Invoke();
                 }
             }
@@ -233,7 +233,7 @@ namespace RenderStorm.Display
             {
                 RSDebugger.Dispose();
                 ImGuiSdl2Impl.ImGui_ImplSDL2_Shutdown();
-                ImGuiDx11Impl.ImGui_ImplDX11_Shutdown();
+                ImGuiDx11Impl.Shutdown();
                 ImGui.DestroyContext();
                 D3dDeviceContainer.Dispose();
                 SDL.SDL_DestroyWindow(Native);

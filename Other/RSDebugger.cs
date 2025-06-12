@@ -128,9 +128,11 @@ float4 frag(VertexOut input) : SV_Target
     /// Don't use this for ANYTHING other than debug, It is slow and inefficient.
     /// </summary>
     /// <param name="text">Text to be rendered</param>
+    /// <param name="centerHorizontally"></param>
     /// <param name="position">The position of the text relative to the top left corner</param>
     /// <param name="color">The color of the text</param>
-    public static void DrawDebugText(string text, Vector2? position = null, Color? color = null, bool bg = false)
+    /// <param name="bg"></param>
+    public static void DrawDebugText(string text, bool centerHorizontally = false, Vector2? position = null, Color? color = null, bool bg = false)
     {
         if (string.IsNullOrEmpty(text)) return;
         var col = color ?? Color.White;
@@ -144,8 +146,25 @@ float4 frag(VertexOut input) : SV_Target
             col.A / 255f
         ));
 
-        drawList.AddText(pos, colU32, text);
+        var lines = text.Split('\n');
+        float lineHeight = ImGui.GetTextLineHeight();
+
+        for (int i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i];
+            var textSize = ImGui.CalcTextSize(line);
+
+            float x = pos.X;
+            if (centerHorizontally)
+            {
+                x -= textSize.X / 2f;  // center each line horizontally around pos.X
+            }
+
+            float y = pos.Y + i * lineHeight;
+            drawList.AddText(new Vector2(x, y), colU32, line);
+        }
     }
+
     public static void DrawDebugRect(Vector2 position, Vector2 size, Color? color = null, bool bg = false)
     {
         var col = color ?? Color.White;
