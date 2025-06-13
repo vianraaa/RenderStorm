@@ -10,7 +10,6 @@ public static class D3D11State
     public static bool MultiSampleEnable { get; set; } = false;
     public static bool AntialiasedLineEnable { get; set; } = false;
     public static bool CullFaceEnabled { get; set; } = true;
-    public static bool InvertCulling { get; set; } = false;
     public static bool AlphaBlendingEnabled { get; set; } = true;
     public static bool DepthWriteEnabled { get; set; } = true;
     public static uint Samples { get; set; } = 1;

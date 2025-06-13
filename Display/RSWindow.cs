@@ -107,6 +107,7 @@ namespace RenderStorm.Display
 
         public void Run()
         {
+            SDL.SDL_CaptureMouse(SDL.SDL_bool.SDL_TRUE);
             RSDebugger.Init(this);
             double lastFrameTime = SDL.SDL_GetTicks() / 1000.0;
             ViewBegin?.Invoke();
